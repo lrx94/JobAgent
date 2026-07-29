@@ -1,0 +1,17 @@
+{
+    "name": "Data Engineer",
+    "cv": "cv.pdf",
+    "keywords": [
+        "Python",
+        "Azure",
+        "SQL",
+        "Spark",
+        "ETL"
+    ],
+    "locations": [
+        "Paris",
+        "Remote"
+    ],
+    "salary_min": 65000,
+    "remote": true
+}

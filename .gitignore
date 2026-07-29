@@ -1,0 +1,28 @@
+# Environnement virtuel
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Streamlit
+.streamlit/
+
+# Variables d'environnement
+.env
+
+# Base SQLite
+*.db
+
+# VS Code
+.vscode/
+
+# Rapports temporaires
+data/reports/
+
+# Logs
+*.log
