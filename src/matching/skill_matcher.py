@@ -1,15 +1,30 @@
+from .skill_dictionary import SKILL_ALIASES
+
+
 class SkillMatcher:
 
-    def match(self, profile_skills, job_text):
+    def match(self, profile_skills, text):
+
+        text = text.lower()
 
         matched = []
         missing = []
 
-        job_lower = job_text.lower()
-
         for skill in profile_skills:
 
-            if skill.lower() in job_lower:
+            canonical = skill.lower()
+
+            aliases = SKILL_ALIASES.get(
+                canonical,
+                [canonical]
+            )
+
+            found = any(
+                alias in text
+                for alias in aliases
+            )
+
+            if found:
                 matched.append(skill)
             else:
                 missing.append(skill)
