@@ -57,3 +57,25 @@ __pycache__/
 # Generated reports
 # ==========================
 data/reports/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Tests
+.pytest_cache/
+.mypy_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+

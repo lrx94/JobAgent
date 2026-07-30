@@ -1,46 +1,68 @@
+"""
+Extraction intelligente des compétences.
+
+Utilise :
+
+- SkillNormalizer
+- SKILL_SYNONYMS
+- SKILL_GRAPH
+"""
+
 import re
+
+from src.ai.skill_dictionary import SKILL_SYNONYMS
+from src.ai.skill_graph import SKILL_GRAPH
+from src.ai.skill_normalizer import SkillNormalizer
 
 
 class SkillExtractor:
 
-    SKILLS = [
-        "Python",
-        "SQL",
-        "Azure",
-        "Databricks",
-        "Spark",
-        "Airflow",
-        "Docker",
-        "Kubernetes",
-        "Snowflake",
-        "Power BI",
-        "Microsoft Fabric",
-        "Synapse",
-        "Data Factory",
-        "GenAI",
-        "OpenAI",
-        "LangChain",
-        "Machine Learning",
-        "IA",
-        "ITIL",
-        "COBIT",
-        "PRINCE2",
-        "PMP",
-        "Agile",
-        "Scrum"
-    ]
+    def extract(self, text: str) -> list[str]:
 
-    def extract(self, text: str):
+        text = text.lower()
 
-        found = []
+        found = set()
 
-        for skill in self.SKILLS:
+        # Toutes les compétences connues
+        skills = (
+            set(SKILL_SYNONYMS.keys())
+            | set(SKILL_GRAPH.keys())
+        )
 
-            if re.search(
-                rf"\b{re.escape(skill)}\b",
-                text,
-                re.IGNORECASE
-            ):
-                found.append(skill)
+        for skill in sorted(skills):
+
+            canonical = SkillNormalizer.normalize(skill)
+
+            candidates = [canonical]
+            candidates.extend(
+                SKILL_SYNONYMS.get(
+                    canonical,
+                    [],
+                )
+            )
+
+            related = SKILL_GRAPH.get(
+                canonical,
+                {},
+            ).get(
+                "related",
+                [],
+            )
+
+            candidates.extend(related)
+
+            for candidate in candidates:
+
+                pattern = (
+                    rf"\b{re.escape(candidate.lower())}\b"
+                )
+
+                if re.search(
+                    pattern,
+                    text,
+                    re.IGNORECASE,
+                ):
+                    found.add(canonical)
+                    break
 
         return sorted(found)
