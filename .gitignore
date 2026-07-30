@@ -1,28 +1,59 @@
-# Environnement virtuel
+# ==========================
+# Virtual environments
+# ==========================
 .venv/
+venv/
 
+# ==========================
 # Python
+# ==========================
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.egg-info/
 
+# ==========================
 # macOS
+# ==========================
 .DS_Store
 
+# ==========================
 # Streamlit
-.streamlit/
+# ==========================
+.streamlit/secrets.toml
 
-# Variables d'environnement
+# ==========================
+# Environment variables
+# ==========================
 .env
 
-# Base SQLite
+# ==========================
+# SQLite
+# ==========================
 *.db
 
-# VS Code
+# ==========================
+# VS Code / IDE
+# ==========================
 .vscode/
+.idea/
 
-# Rapports temporaires
-data/reports/
+# ==========================
+# Pytest
+# ==========================
+.pytest_cache/
 
+# ==========================
+# Ruff
+# ==========================
+.ruff_cache/
+
+# ==========================
 # Logs
+# ==========================
 *.log
+
+# ==========================
+# Generated reports
+# ==========================
+data/reports/
