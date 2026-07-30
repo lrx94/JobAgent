@@ -1,4 +1,6 @@
+
 from dataclasses import dataclass, field
+
 
 @dataclass
 class Job:
@@ -18,3 +20,4 @@ class Job:
     missing_skills: list[str] = field(default_factory=list)
 
     explanation: str = ""
+    

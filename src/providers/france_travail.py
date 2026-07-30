@@ -1,4 +1,4 @@
-from src.models import Job
+from src.domain import Job
 from src.providers.base import JobProvider
 
 class FranceTravailProvider(JobProvider):
