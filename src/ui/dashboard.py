@@ -12,19 +12,25 @@ def display_dashboard(jobs):
         sum(job.score for job in jobs) / nb_jobs
     )
 
+    best_score = max(job.score for job in jobs)
+
     excellent = len(
-        [j for j in jobs if j.score >= 80]
+        [
+            job
+            for job in jobs
+            if job.score >= 80
+        ]
     )
 
     remote = len(
         [
-            j
-            for j in jobs
-            if "remote" in j.location.lower()
+            job
+            for job in jobs
+            if "remote" in job.location.lower()
         ]
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric(
         "📄 Offres",
@@ -32,16 +38,21 @@ def display_dashboard(jobs):
     )
 
     c2.metric(
-        "⭐ Score moyen",
-        f"{average}%"
+        "🏆 Meilleur",
+        f"{best_score}%"
     )
 
     c3.metric(
-        "🟢 >80 %",
-        excellent
+        "⭐ Moyenne",
+        f"{average}%"
     )
 
     c4.metric(
+        "🟢 Excellents",
+        excellent
+    )
+
+    c5.metric(
         "🏠 Remote",
         remote
     )
