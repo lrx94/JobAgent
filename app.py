@@ -17,8 +17,10 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 JobAgent")
-st.caption("Assistant intelligent de recherche d'emploi")
+st.title("🚀 JobAgent")
+st.caption("Votre assistant intelligent de recherche d'emploi")
+
+st.divider()
 
 # --------------------------------------------------
 # Chargement des profils
@@ -105,7 +107,51 @@ if st.button("🔍 Rechercher des offres", use_container_width=True):
         for job in jobs:
             repository.save(job)
         display_dashboard(jobs)
-        
+        if jobs:
+            best_score = max(job.score for job in jobs)
+            average = round(
+                sum(job.score for job in jobs) / len(jobs)
+            )
+            keywords = ", ".join(profile.keywords[:3]) if profile.keywords else "Aucun"
+            locations = ", ".join(profile.locations) if profile.locations else "Toutes"
+            remote = "Oui" if profile.remote else "Non"
+
+            st.subheader("🎯 Recherche")
+
+            c1, c2, c3, c4 = st.columns(4)
+
+            keywords = ", ".join(profile.keywords[:3]) if profile.keywords else "-"
+
+            locations = ", ".join(profile.locations) if profile.locations else "Toutes"
+
+            c1.metric(
+                "👤 Profil",
+                profile.name,
+            )
+
+            c2.metric(
+                "🛠️ Compétences",
+                keywords,
+            )
+
+            c3.metric(
+                "📍 Zone",
+                locations,
+            )
+
+            c4.metric(
+                "🏠 Remote",
+                "Oui" if profile.remote else "Non",
+            )
+
+            st.divider()
+            st.caption(
+                f"🔍 {len(jobs)} offres analysées • "
+                f"🏆 Meilleur score : {best_score}% • "
+                f"⭐ Moyenne : {average}%"
+            )
+
+            st.divider()
 
     st.success(f"{len(jobs)} offre(s) trouvée(s)")
 

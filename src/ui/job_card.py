@@ -16,18 +16,18 @@ def display_job(job):
         with col1:
 
             st.subheader(job.title)
+            st.caption(
+                f"🏢 **{job.company}** • "
+                f"📍 {job.location} • "
+                f"🌐 {job.source}"
+            )
 
-            st.write(f"🏢 {job.company}")
-
-            st.write(f"📍 {job.location}")
-
-            st.caption(job.source)
 
         with col2:
 
             st.metric(
-                "Matching",
-                f"{job.score}%"
+                label="🎯 Matching",
+                value=f"{job.score}%"
             )
 
         # Barre de progression
@@ -60,32 +60,46 @@ def display_job(job):
                     f"💰 Salaire : {job.match_details.get('salary', 0)} pts"
                 )
 
+        st.divider()
         # Compétences trouvées
         if job.matched_skills:
-
+            st.markdown("#### 🟢 Compétences détectées")
             st.success(
-                "✔ " + " • ".join(job.matched_skills)
+                 " • ".join(job.matched_skills)
             )
 
         # Compétences manquantes
         if job.missing_skills:
 
+            st.markdown("#### 🔴 Compétences manquantes")
             st.warning(
-                "❌ " + " • ".join(job.missing_skills)
-            )
+                " • ".join(job.missing_skills)
+                )
 
         # Description
         if job.description:
 
             with st.expander("📄 Description"):
 
-                st.write(job.description)
+                description = job.description or ""
+
+                MAX_LENGTH = 300
+
+                if len(description) > MAX_LENGTH:
+
+                    st.write(description[:MAX_LENGTH] + "...")
+
+                    st.caption("Lire la suite en ouvrant l'offre.")
+
+                else:
+
+                    st.write(description)
 
         # Lien
         if job.url:
 
             st.link_button(
-                "Voir l'offre",
-                job.url,
-                use_container_width=True,
+                "🔗 Consulter l'offre",
+                 job.url,
+                 use_container_width=True,
             )
