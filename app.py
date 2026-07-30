@@ -1,8 +1,11 @@
 import streamlit as st
-
+from src.ui.job_card import display_job
 from src.profile import Profile
 from src.profile_manager import ProfileManager
 from src.services.job_service import JobService
+from src.ui.dashboard import display_dashboard
+from src.storage.database import init_database
+from src.storage.repository import JobRepository
 
 # --------------------------------------------------
 # Configuration de la page
@@ -89,11 +92,20 @@ st.sidebar.write("Oui" if profile.remote else "Non")
 
 service = JobService()
 
+
+init_database()
+
+repository = JobRepository()
+
 if st.button("🔍 Rechercher des offres", use_container_width=True):
 
     with st.spinner("Recherche des offres..."):
 
         jobs = service.search(profile)
+        for job in jobs:
+            repository.save(job)
+        display_dashboard(jobs)
+        
 
     st.success(f"{len(jobs)} offre(s) trouvée(s)")
 
@@ -101,52 +113,4 @@ if st.button("🔍 Rechercher des offres", use_container_width=True):
 
     for job in jobs:
 
-        with st.container(border=True):
-
-            c1, c2 = st.columns([4, 1])
-
-            with c1:
-
-                st.subheader(job.title)
-
-                st.write(f"🏢 **{job.company}**")
-
-                st.write(f"📍 {job.location}")
-
-                st.write(f"🌐 {job.source}")
-
-            with c2:
-
-                st.metric(
-                    "Score",
-                    f"{job.score}%"
-                )
-
-            if job.matched_skills:
-
-                st.write("### Compétences reconnues")
-
-                st.success(
-                    ", ".join(job.matched_skills)
-                )
-
-            if job.missing_skills:
-
-                st.write("### Compétences manquantes")
-
-                st.warning(
-                    ", ".join(job.missing_skills)
-                )
-
-            if job.description:
-
-                with st.expander("Description"):
-
-                    st.write(job.description)
-
-            if job.url:
-
-                st.link_button(
-                    "Voir l'offre",
-                    job.url
-                )
+         display_job(job)
