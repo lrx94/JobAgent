@@ -1,11 +1,20 @@
 class Scorer:
 
-    def skill_score(self, matched, total):
+    def skill_score(self, matches, total):
+        """
+        matches :
+            float représentant le nombre pondéré
+            de compétences reconnues.
+
+            Exemple :
+                2.0 = deux matches exacts
+                1.5 = un exact + un sémantique
+        """
 
         if total == 0:
             return 0
 
-        return round(len(matched) / total * 100)
+        return round(matches / total * 100)
 
     def location_score(self, profile, job):
 
@@ -13,6 +22,7 @@ class Scorer:
             return 100
 
         for location in profile.locations:
+
             if location.lower() in job.location.lower():
                 return 100
 
@@ -43,12 +53,12 @@ class Scorer:
         skill,
         location,
         remote,
-        salary
+        salary,
     ):
 
         return round(
-            skill * 0.50 +
-            location * 0.20 +
-            remote * 0.15 +
-            salary * 0.15
+            skill * 0.50
+            + location * 0.20
+            + remote * 0.15
+            + salary * 0.15
         )

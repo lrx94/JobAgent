@@ -11,36 +11,43 @@ class MatchingEngine:
 
     def match(self, profile, job):
 
-        matched, missing = self.matcher.match(
+        matched, partial, missing = self.matcher.match(
             profile.keywords,
-            job.title + " " + job.description
+            job.title + " " + job.description,
+        )
+
+        # Score des compétences
+        # Une compétence proche compte pour un demi-match.
+        weighted_matches = (
+            len(matched)
+            + 0.5 * len(partial)
         )
 
         skill = self.scorer.skill_score(
-            matched,
-            len(profile.keywords)
+            weighted_matches,
+            len(profile.keywords),
         )
 
         location = self.scorer.location_score(
             profile,
-            job
+            job,
         )
 
         remote = self.scorer.remote_score(
             profile,
-            job
+            job,
         )
 
         salary = self.scorer.salary_score(
             profile,
-            job
+            job,
         )
 
         score = self.scorer.global_score(
             skill,
             location,
             remote,
-            salary
+            salary,
         )
 
         return MatchResult(
@@ -49,8 +56,9 @@ class MatchingEngine:
             missing_skills=missing,
             details={
                 "skills": skill,
+                "semantic_matches": partial,
                 "location": location,
                 "remote": remote,
-                "salary": salary
-            }
+                "salary": salary,
+            },
         )
