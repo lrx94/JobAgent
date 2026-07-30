@@ -37,7 +37,6 @@ class JobService:
                     f"{provider.__class__.__name__} : {e}"
                 )
 
-        # Matching
         for job in jobs:
 
             result = self.engine.match(
@@ -45,17 +44,10 @@ class JobService:
                 job
             )
 
-            print("--------------------------------")
-            print(job.title)
-            print("score calculé :", result.score)
-
             job.score = result.score
-
-            print("score stocké  :", job.score)
-
             job.matched_skills = result.matched_skills
-
             job.missing_skills = result.missing_skills
+            job.match_details = result.details
 
         jobs.sort(
             key=lambda j: j.score,

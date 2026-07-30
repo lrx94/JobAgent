@@ -37,6 +37,26 @@ def display_job(job):
                 f"{color} {job.score}%"
             )
 
+        if job.match_details:
+
+            with st.expander("📊 Pourquoi ce score ?"):
+
+                st.write(
+                    f"🧠 Compétences : {job.match_details.get('skills', 0)} pts"
+                )
+
+                st.write(
+                    f"📍 Localisation : {job.match_details.get('location', 0)} pts"
+                )
+
+                st.write(
+                    f"🏠 Télétravail : {job.match_details.get('remote', 0)} pts"
+                )
+
+                st.write(
+                    f"💰 Salaire : {job.match_details.get('salary', 0)} pts"
+                )
+
         if job.matched_skills:
 
             st.success(

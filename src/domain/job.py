@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, field
 
 
@@ -20,4 +19,5 @@ class Job:
     missing_skills: list[str] = field(default_factory=list)
 
     explanation: str = ""
-    
+
+    match_details: dict = field(default_factory=dict)
