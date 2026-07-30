@@ -1,14 +1,20 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
-class JobOffer:
+class Job:
     title: str
     company: str
     location: str
     description: str
-    url: str
     source: str
 
-    salary: str = ""
-    contract: str = ""
+    url: str = ""
+    salary: int = 0
     remote: bool = False
+
+    score: int = 0
+
+    matched_skills: list[str] = field(default_factory=list)
+    missing_skills: list[str] = field(default_factory=list)
+
+    explanation: str = ""

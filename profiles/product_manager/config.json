@@ -1,3 +1,19 @@
 {
-    "name": "Product Manager"
+    "name": "Product Manager",
+    "cv": "cv.pdf",
+    "keywords": [
+        "Product Manager",
+        "Product Owner",
+        "Agile",
+        "Scrum",
+        "Roadmap",
+        "Discovery",
+        "UX"
+    ],
+    "locations": [
+        "Paris",
+        "Remote"
+    ],
+    "salary_min": 65000,
+    "remote": true
 }

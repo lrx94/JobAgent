@@ -1,11 +1,11 @@
-from src.models import JobOffer
+from src.models import Job
 from src.providers.base import JobProvider
 
 class FranceTravailProvider(JobProvider):
 
     def search(self, keyword: str, location: str):
         return [
-            JobOffer(
+            Job(
                 title="Développeur Python IA",
                 company="Entreprise Demo",
                 location=location,
@@ -13,7 +13,7 @@ class FranceTravailProvider(JobProvider):
                 url="https://example.com/job1",
                 source="France Travail"
             ),
-            JobOffer(
+            Job(
                 title="Data Engineer",
                 company="Entreprise Demo 2",
                 location=location,

@@ -1,135 +1,152 @@
 import streamlit as st
 
-from src.search import search_jobs
-from src.database import init_database
+from src.profile import Profile
 from src.profile_manager import ProfileManager
+from src.services.job_service import JobService
 
-# ----------------------------------------------------
-# Initialisation
-# ----------------------------------------------------
-
-init_database()
+# --------------------------------------------------
+# Configuration de la page
+# --------------------------------------------------
 
 st.set_page_config(
-    page_title="JobAgent IA",
+    page_title="JobAgent",
     page_icon="🤖",
     layout="wide"
 )
 
-st.title("🤖 JobAgent IA")
+st.title("🤖 JobAgent")
 st.caption("Assistant intelligent de recherche d'emploi")
 
-# ----------------------------------------------------
+# --------------------------------------------------
 # Chargement des profils
-# ----------------------------------------------------
+# --------------------------------------------------
 
 pm = ProfileManager()
 profiles = pm.list_profiles()
 
 if not profiles:
-    st.error("Aucun profil trouvé dans le dossier profiles/")
+    st.error("Aucun profil trouvé.")
     st.stop()
 
 profile_names = [p["name"] for p in profiles]
 
 selected_profile = st.sidebar.selectbox(
-    "Choisir un profil",
+    "Profil",
     profile_names
 )
 
-profile = next(
+profile_data = next(
     p for p in profiles
     if p["name"] == selected_profile
 )
 
-# ----------------------------------------------------
-# Valeurs par défaut
-# ----------------------------------------------------
-
-default_keywords = ", ".join(
-    profile.get("keywords", [])
+profile = Profile(
+    name=profile_data["name"],
+    keywords=profile_data.get("keywords", []),
+    locations=profile_data.get("locations", []),
+    salary_min=profile_data.get("salary_min", 0),
+    remote=profile_data.get("remote", False)
 )
 
-locations = profile.get("locations", [])
+# --------------------------------------------------
+# Informations du profil
+# --------------------------------------------------
 
-default_location = ""
+st.sidebar.markdown("---")
 
-if locations:
-    default_location = locations[0]
+st.sidebar.write("### Compétences")
 
-salary = profile.get("salary_min", "")
-remote = profile.get("remote", False)
+for skill in profile.keywords:
+    st.sidebar.write("✅", skill)
 
-# ----------------------------------------------------
-# Interface
-# ----------------------------------------------------
+st.sidebar.markdown("---")
 
-st.subheader(f"👤 Profil : {selected_profile}")
+st.sidebar.write("📍 Localisation")
 
-col1, col2 = st.columns(2)
+if profile.locations:
+    st.sidebar.write(", ".join(profile.locations))
+else:
+    st.sidebar.write("Toutes")
 
-with col1:
+st.sidebar.markdown("---")
 
-    keyword = st.text_input(
-        "Mot-clé",
-        value=default_keywords
-    )
+st.sidebar.write("💰 Salaire minimum")
 
-with col2:
+if profile.salary_min:
+    st.sidebar.write(f"{profile.salary_min:,} €".replace(",", " "))
+else:
+    st.sidebar.write("Non défini")
 
-    location = st.text_input(
-        "Localisation",
-        value=default_location
-    )
+st.sidebar.markdown("---")
 
-col3, col4 = st.columns(2)
+st.sidebar.write("🏠 Télétravail")
 
-with col3:
+st.sidebar.write("Oui" if profile.remote else "Non")
 
-    st.text_input(
-        "Salaire minimum",
-        value=str(salary),
-        disabled=True
-    )
-
-with col4:
-
-    st.checkbox(
-        "Télétravail",
-        value=remote,
-        disabled=True
-    )
-
-# ----------------------------------------------------
+# --------------------------------------------------
 # Recherche
-# ----------------------------------------------------
+# --------------------------------------------------
 
-if st.button("🔍 Rechercher", type="primary"):
+service = JobService()
 
-    with st.spinner("Recherche en cours..."):
+if st.button("🔍 Rechercher des offres", use_container_width=True):
 
-        jobs = search_jobs(keyword, location)
+    with st.spinner("Recherche des offres..."):
+
+        jobs = service.search(profile)
 
     st.success(f"{len(jobs)} offre(s) trouvée(s)")
 
-    if jobs:
+    st.divider()
 
-        rows = []
+    for job in jobs:
 
-        for job in jobs:
+        with st.container(border=True):
 
-            rows.append({
-                "Poste": job.title,
-                "Entreprise": job.company,
-                "Ville": job.location,
-                "Source": job.source
-            })
+            c1, c2 = st.columns([4, 1])
 
-        st.dataframe(
-            rows,
-            use_container_width=True
-        )
+            with c1:
 
-    else:
+                st.subheader(job.title)
 
-        st.warning("Aucune offre trouvée.")
+                st.write(f"🏢 **{job.company}**")
+
+                st.write(f"📍 {job.location}")
+
+                st.write(f"🌐 {job.source}")
+
+            with c2:
+
+                st.metric(
+                    "Score",
+                    f"{job.score}%"
+                )
+
+            if job.matched_skills:
+
+                st.write("### Compétences reconnues")
+
+                st.success(
+                    ", ".join(job.matched_skills)
+                )
+
+            if job.missing_skills:
+
+                st.write("### Compétences manquantes")
+
+                st.warning(
+                    ", ".join(job.missing_skills)
+                )
+
+            if job.description:
+
+                with st.expander("Description"):
+
+                    st.write(job.description)
+
+            if job.url:
+
+                st.link_button(
+                    "Voir l'offre",
+                    job.url
+                )
