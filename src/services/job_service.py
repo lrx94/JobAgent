@@ -45,7 +45,13 @@ class JobService:
                 job
             )
 
+            print("--------------------------------")
+            print(job.title)
+            print("score calculé :", result.score)
+
             job.score = result.score
+
+            print("score stocké  :", job.score)
 
             job.matched_skills = result.matched_skills
 
