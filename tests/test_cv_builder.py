@@ -1,6 +1,7 @@
 
 from src.cv import PdfReader
 from src.cv import CVBuilder
+from src.domain import Skill
 
 reader = PdfReader()
 builder = CVBuilder()
@@ -38,6 +39,13 @@ print("Skills       :", len(cv.skills))
 print("Interests    :", len(cv.interests))
 
 print()
+assert len(cv.experiences) == 5
+
+assert len(cv.education) == 3
+
+assert len(cv.languages) == 3
+
+assert len(cv.interests) == 6
 
 print("=" * 80)
 print("Première expérience")
@@ -56,3 +64,9 @@ print("Compétences")
 print("=" * 80)
 
 print(cv.skills)
+assert len(cv.skills) == 39
+
+assert isinstance(cv.skills[0], Skill)
+
+assert cv.skills[0].name != ""
+print(type(cv.skills[0]))
