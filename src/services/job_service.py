@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Any
+
 from src.domain import Job
 from src.matching.engine import MatchingEngine
 from src.profile import Profile
@@ -8,63 +11,77 @@ from src.providers.france_travail import (
     FranceTravailProvider,
 )
 from src.search_request import SearchRequest
+from src.services.job_aggregator import (
+    AggregationResult,
+    JobAggregator,
+)
 
 
 class JobService:
     """
-    Orchestre la recherche multi-provider et le matching.
+    Orchestre la collecte des offres et leur matching.
+
+    La collecte multi-provider est déléguée à JobAggregator.
+    JobService reste responsable :
+
+    - de la construction du SearchRequest ;
+    - du matching des offres avec le profil ;
+    - de l'enrichissement des objets Job ;
+    - du tri final par score.
     """
 
     def __init__(
         self,
-        providers: list[JobProvider] | None = None,
+        providers: Iterable[JobProvider] | None = None,
         engine: MatchingEngine | None = None,
+        aggregator: JobAggregator | None = None,
     ) -> None:
-        self.providers = (
-            list(providers)
-            if providers is not None
-            else [FranceTravailProvider()]
-        )
+        if aggregator is not None and providers is not None:
+            raise ValueError(
+                "Fournir soit providers, soit aggregator, "
+                "mais pas les deux."
+            )
 
+        if aggregator is None:
+            configured_providers = (
+                list(providers)
+                if providers is not None
+                else [FranceTravailProvider()]
+            )
+
+            aggregator = JobAggregator(
+                configured_providers
+            )
+
+        self.aggregator = aggregator
         self.engine = engine or MatchingEngine()
 
+        # Compatibilité avec le code historique pouvant consulter
+        # directement service.providers.
+        self.providers = self.aggregator.registry.all()
+
         self.provider_errors: list[str] = []
+        self.last_aggregation_result: (
+            AggregationResult | None
+        ) = None
 
     def search(
         self,
         profile: Profile,
     ) -> list[Job]:
-        request = SearchRequest.from_profile(
-            profile
-        )
+        """
+        Collecte, évalue et trie les offres pour un profil.
+        """
+
+        request = SearchRequest.from_profile(profile)
 
         jobs = self.search_jobs(request)
 
         for job in jobs:
-            result = self.engine.match(
-                profile,
-                job,
+            self._apply_matching(
+                profile=profile,
+                job=job,
             )
-
-            job.score = result.score
-            job.matched_skills = list(
-                result.matched_skills
-            )
-            job.missing_skills = list(
-                result.missing_skills
-            )
-            job.match_details = dict(
-                result.details or {}
-            )
-
-            explanation = getattr(
-                result,
-                "explanation",
-                "",
-            )
-
-            if explanation:
-                job.explanation = explanation
 
         jobs.sort(
             key=lambda job: job.score,
@@ -80,52 +97,106 @@ class JobService:
         """
         Exécute uniquement la collecte des offres.
 
-        Cette méthode permettra plus tard de stocker les annonces
-        brutes avant de lancer ou de rejouer le matching.
+        La déduplication, la validation des objets Job,
+        l'isolation des erreurs et les statistiques sont
+        gérées par JobAggregator.
         """
 
-        jobs: list[Job] = []
-        self.provider_errors = []
+        aggregation_result = self.aggregator.collect(
+            request
+        )
 
-        for provider in self.providers:
-            try:
-                provider_jobs = provider.search(
-                    request
-                )
+        self.last_aggregation_result = (
+            aggregation_result
+        )
 
-                for job in provider_jobs or []:
-                    if not isinstance(job, Job):
-                        raise TypeError(
-                            f"{provider.name} a retourné "
-                            "un élément qui n'est pas un Job."
-                        )
+        self.provider_errors = (
+            self._extract_provider_errors(
+                aggregation_result
+            )
+        )
 
-                    jobs.append(job)
+        return list(aggregation_result.jobs)
 
-            except Exception as error:
-                message = (
-                    f"{provider.name} : {error}"
-                )
+    @property
+    def collection_stats(self) -> dict[str, Any]:
+        """
+        Retourne les statistiques de la dernière collecte.
 
-                self.provider_errors.append(message)
-                print(message)
+        Avant la première collecte, retourne une structure vide
+        mais stable pour faciliter son utilisation dans l'UI.
+        """
 
-        return self._deduplicate(jobs)
+        if self.last_aggregation_result is None:
+            return {
+                "total_collected": 0,
+                "total_unique": 0,
+                "duplicates_removed": 0,
+                "invalid_jobs_removed": 0,
+                "errors": 0,
+                "successful_providers": 0,
+                "failed_providers": 0,
+                "providers": {},
+            }
+
+        return self.last_aggregation_result.to_dict()
+
+    def _apply_matching(
+        self,
+        profile: Profile,
+        job: Job,
+    ) -> None:
+        """
+        Applique le résultat du moteur de matching à une offre.
+        """
+
+        result = self.engine.match(
+            profile,
+            job,
+        )
+
+        job.score = result.score
+
+        job.matched_skills = list(
+            result.matched_skills
+        )
+
+        job.missing_skills = list(
+            result.missing_skills
+        )
+
+        job.match_details = dict(
+            result.details or {}
+        )
+
+        explanation = getattr(
+            result,
+            "explanation",
+            "",
+        )
+
+        if explanation:
+            job.explanation = explanation
 
     @staticmethod
-    def _deduplicate(
-        jobs: list[Job],
-    ) -> list[Job]:
-        unique_jobs: list[Job] = []
-        seen: set[str] = set()
+    def _extract_provider_errors(
+        aggregation_result: AggregationResult,
+    ) -> list[str]:
+        """
+        Convertit les erreurs de l'agrégateur dans le format
+        historique de JobService.
+        """
 
-        for job in jobs:
-            identity = job.identity
+        errors: list[str] = []
 
-            if identity in seen:
+        for provider_name, stats in (
+            aggregation_result.provider_stats.items()
+        ):
+            if not stats.error:
                 continue
 
-            seen.add(identity)
-            unique_jobs.append(job)
+            errors.append(
+                f"{provider_name} : {stats.error}"
+            )
 
-        return unique_jobs
+        return errors

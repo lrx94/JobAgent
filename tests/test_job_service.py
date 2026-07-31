@@ -10,6 +10,8 @@ from src.services.job_service import JobService
 
 class FakeProvider(JobProvider):
 
+    name = "FakeProvider"
+
     def search(
         self,
         request: SearchRequest,
@@ -31,12 +33,16 @@ class FakeProvider(JobProvider):
                 location=request.primary_location,
                 description="Duplicate",
                 source="Fake",
-                url="https://example.com/duplicate",
+                url=(
+                    "https://example.com/duplicate"
+                ),
             ),
         ]
 
 
 class FailingProvider(JobProvider):
+
+    name = "FailingProvider"
 
     def search(
         self,
@@ -103,17 +109,25 @@ class TestJobService(unittest.TestCase):
         job = jobs[0]
 
         self.assertEqual(job.score, 75)
+
         self.assertEqual(
             job.matched_skills,
             ["Python"],
         )
+
         self.assertEqual(
             job.missing_skills,
             ["Spark"],
         )
+
         self.assertEqual(
             job.match_details,
             {"skills": 75},
+        )
+
+        self.assertEqual(
+            job.explanation,
+            "Test",
         )
 
     def test_provider_error_does_not_stop_search(self):
@@ -130,13 +144,45 @@ class TestJobService(unittest.TestCase):
         )
 
         self.assertEqual(len(jobs), 1)
+
         self.assertEqual(
             len(service.provider_errors),
             1,
         )
+
         self.assertIn(
             "Provider indisponible",
             service.provider_errors[0],
+        )
+
+    def test_collection_stats_are_available(self):
+        service = JobService(
+            providers=[FakeProvider()],
+            engine=FakeMatchingEngine(),
+        )
+
+        service.search(self.profile)
+
+        statistics = service.collection_stats
+
+        self.assertEqual(
+            statistics["total_collected"],
+            2,
+        )
+
+        self.assertEqual(
+            statistics["total_unique"],
+            1,
+        )
+
+        self.assertEqual(
+            statistics["duplicates_removed"],
+            1,
+        )
+
+        self.assertEqual(
+            statistics["errors"],
+            0,
         )
 
 
