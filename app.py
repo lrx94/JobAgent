@@ -4,8 +4,6 @@ import streamlit as st
 
 from src.profile_manager import ProfileManager
 from src.services.job_service import JobService
-from src.storage.database import init_database
-from src.storage.repository import JobRepository
 from src.ui.dashboard import display_dashboard
 from src.ui.job_card import display_job
 
@@ -36,25 +34,19 @@ st.divider()
 def create_job_service() -> JobService:
     """
     Crée une instance unique du service de recherche.
+
+    JobService gère désormais lui-même :
+    - la collecte ;
+    - le matching ;
+    - la persistance SQLite ;
+    - l'historisation des offres.
     """
 
     return JobService()
 
 
-@st.cache_resource
-def create_repository() -> JobRepository:
-    """
-    Initialise la base et crée une instance unique du repository.
-    """
-
-    init_database()
-
-    return JobRepository()
-
-
 profile_manager = ProfileManager()
 job_service = create_job_service()
-job_repository = create_repository()
 
 
 # --------------------------------------------------
@@ -65,7 +57,8 @@ profile_names = profile_manager.list_profiles()
 
 if not profile_names:
     st.error(
-        "Aucun profil valide n'a été trouvé dans le dossier profiles."
+        "Aucun profil valide n'a été trouvé "
+        "dans le dossier profiles."
     )
     st.stop()
 
@@ -103,7 +96,9 @@ if profile.keywords:
     for skill in profile.keywords:
         st.sidebar.write(f"✅ {skill}")
 else:
-    st.sidebar.write("Aucune compétence définie")
+    st.sidebar.write(
+        "Aucune compétence définie"
+    )
 
 st.sidebar.markdown("---")
 st.sidebar.write("### 📍 Localisation")
@@ -132,6 +127,7 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.write("### 🏠 Télétravail")
+
 st.sidebar.write(
     "Oui"
     if profile.remote
@@ -145,9 +141,12 @@ st.sidebar.write(
 
 st.subheader("🎯 Paramètres de recherche")
 
-column_profile, column_skills, column_location, column_remote = (
-    st.columns(4)
-)
+(
+    column_profile,
+    column_skills,
+    column_location,
+    column_remote,
+) = st.columns(4)
 
 displayed_keywords = (
     ", ".join(profile.keywords[:3])
@@ -209,20 +208,6 @@ if search_clicked:
             if jobs is None:
                 jobs = []
 
-            for job in jobs:
-                try:
-                    job_repository.save(job)
-
-                except Exception as repository_error:
-                    st.warning(
-                        "Une offre n'a pas pu être enregistrée "
-                        "dans la base locale."
-                    )
-
-                    st.caption(
-                        str(repository_error)
-                    )
-
     except Exception as search_error:
         st.error(
             "Une erreur est survenue pendant la recherche."
@@ -231,15 +216,36 @@ if search_clicked:
         st.exception(search_error)
         st.stop()
 
+    if job_service.provider_errors:
+        for provider_error in job_service.provider_errors:
+            st.warning(
+                f"Erreur de collecte : {provider_error}"
+            )
+
+    if job_service.persistence_errors:
+        st.warning(
+            "Certaines offres n'ont pas pu être "
+            "enregistrées dans la base locale."
+        )
+
+        for persistence_error in (
+            job_service.persistence_errors
+        ):
+            st.caption(persistence_error)
+
     if not jobs:
         st.warning(
-            "Aucune offre n'a été trouvée pour ce profil."
+            "Aucune offre n'a été trouvée "
+            "pour ce profil."
         )
 
         st.stop()
 
     scores = [
-        float(getattr(job, "score", 0) or 0)
+        float(
+            getattr(job, "score", 0)
+            or 0
+        )
         for job in jobs
     ]
 
@@ -249,6 +255,14 @@ if search_clicked:
 
     average_score = round(
         sum(scores) / len(scores)
+    )
+
+    persistence_stats = (
+        job_service.persistence_stats
+    )
+
+    persistence_actions = (
+        job_service.persistence_actions
     )
 
     st.success(
@@ -261,14 +275,28 @@ if search_clicked:
         f"⭐ Moyenne : {average_score}%"
     )
 
+    if persistence_stats["enabled"]:
+        st.caption(
+            "💾 Persistance : "
+            f"{persistence_stats['saved']} enregistrée(s) • "
+            f"{persistence_stats['failed']} échec(s)"
+        )
+
+        st.caption(
+            "🟢 "
+            f"{persistence_actions['inserted']} nouvelle(s) • "
+            "🟡 "
+            f"{persistence_actions['updated']} mise(s) à jour • "
+            "⚪ "
+            f"{persistence_actions['unchanged']} inchangée(s)"
+        )
+
     st.divider()
 
-    # Vue synthétique du tableau de bord.
     display_dashboard(jobs)
 
     st.divider()
     st.subheader("📋 Détail des offres")
 
-    # Vue détaillée de chaque offre.
     for job in jobs:
         display_job(job)

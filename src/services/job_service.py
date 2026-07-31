@@ -16,22 +16,14 @@ from src.services.job_aggregator import (
     JobAggregator,
 )
 from src.storage.repository import JobRepository
+from src.storage.save_result import (
+    RepositorySaveResult,
+)
 
 
 class JobService:
     """
-    Orchestre la collecte, le matching et la persistance
-    des offres d'emploi.
-
-    La collecte multi-provider est déléguée à JobAggregator.
-
-    JobService reste responsable :
-
-    - de la construction du SearchRequest ;
-    - du matching des offres avec le profil ;
-    - de l'enrichissement des objets Job ;
-    - de la persistance optionnelle des résultats ;
-    - du tri final par score.
+    Orchestre collecte, matching et persistance.
 
     Une erreur de persistance ne doit jamais empêcher
     la restitution des résultats de recherche.
@@ -65,9 +57,9 @@ class JobService:
         self.aggregator = aggregator
         self.engine = engine or MatchingEngine()
 
-        # Compatibilité avec le code historique pouvant consulter
-        # directement service.providers.
-        self.providers = self.aggregator.registry.all()
+        self.providers = (
+            self.aggregator.registry.all()
+        )
 
         self.persistence_enabled = bool(
             persistence_enabled
@@ -90,8 +82,16 @@ class JobService:
             AggregationResult | None
         ) = None
 
-        self._persistence_stats: dict[str, Any] = (
+        self.last_save_results: list[
+            RepositorySaveResult
+        ] = []
+
+        self._persistence_stats = (
             self._empty_persistence_stats()
+        )
+
+        self._persistence_actions = (
+            self._empty_persistence_actions()
         )
 
     def search(
@@ -99,11 +99,12 @@ class JobService:
         profile: Profile,
     ) -> list[Job]:
         """
-        Collecte, évalue, persiste et trie les offres
-        pour un profil.
+        Collecte, évalue, persiste et trie les offres.
         """
 
-        request = SearchRequest.from_profile(profile)
+        request = SearchRequest.from_profile(
+            profile
+        )
 
         jobs = self.search_jobs(request)
 
@@ -128,17 +129,10 @@ class JobService:
     ) -> list[Job]:
         """
         Exécute uniquement la collecte des offres.
-
-        Cette méthode n'exécute ni le matching,
-        ni la persistance.
-
-        La déduplication, la validation des objets Job,
-        l'isolation des erreurs et les statistiques sont
-        gérées par JobAggregator.
         """
 
-        aggregation_result = self.aggregator.collect(
-            request
+        aggregation_result = (
+            self.aggregator.collect(request)
         )
 
         self.last_aggregation_result = (
@@ -151,17 +145,12 @@ class JobService:
             )
         )
 
-        return list(aggregation_result.jobs)
+        return list(
+            aggregation_result.jobs
+        )
 
     @property
     def collection_stats(self) -> dict[str, Any]:
-        """
-        Retourne les statistiques de la dernière collecte.
-
-        Avant la première collecte, retourne une structure vide
-        mais stable pour faciliter son utilisation dans l'UI.
-        """
-
         if self.last_aggregation_result is None:
             return {
                 "total_collected": 0,
@@ -174,36 +163,35 @@ class JobService:
                 "providers": {},
             }
 
-        return self.last_aggregation_result.to_dict()
+        return (
+            self.last_aggregation_result.to_dict()
+        )
 
     @property
     def persistence_stats(self) -> dict[str, Any]:
         """
-        Retourne les statistiques de la dernière opération
-        de persistance.
-
-        Structure retournée :
-
-        {
-            "enabled": bool,
-            "attempted": int,
-            "saved": int,
-            "failed": int,
-        }
+        Statistiques compatibles avec la V3.8.
         """
 
-        return dict(self._persistence_stats)
+        return dict(
+            self._persistence_stats
+        )
+
+    @property
+    def persistence_actions(self) -> dict[str, int]:
+        """
+        Répartition des actions de sauvegarde V3.9.
+        """
+
+        return dict(
+            self._persistence_actions
+        )
 
     def _apply_matching(
         self,
         profile: Profile,
         job: Job,
     ) -> None:
-        """
-        Applique le résultat du moteur de matching
-        à une offre.
-        """
-
         result = self.engine.match(
             profile,
             job,
@@ -236,50 +224,52 @@ class JobService:
         self,
         jobs: Iterable[Job],
     ) -> None:
-        """
-        Persiste les offres une par une.
-
-        Une erreur sur une offre est isolée afin que :
-
-        - les offres suivantes puissent être enregistrées ;
-        - les résultats restent retournés à l'utilisateur ;
-        - le moteur de recherche ne dépende pas de SQLite.
-        """
-
         job_list = list(jobs)
 
         self.persistence_errors = []
+        self.last_save_results = []
+
         self._persistence_stats = (
             self._empty_persistence_stats()
+        )
+
+        self._persistence_actions = (
+            self._empty_persistence_actions()
         )
 
         if not self.persistence_enabled:
             return
 
-        self._persistence_stats["attempted"] = len(
-            job_list
-        )
+        self._persistence_stats[
+            "attempted"
+        ] = len(job_list)
 
         if self.repository is None:
             message = (
-                "Persistance activée mais aucun repository "
-                "n'est disponible."
+                "Persistance activée mais aucun "
+                "repository n'est disponible."
             )
 
-            self.persistence_errors.append(message)
-
-            self._persistence_stats["failed"] = len(
-                job_list
+            self.persistence_errors.append(
+                message
             )
+
+            self._persistence_stats[
+                "failed"
+            ] = len(job_list)
 
             return
 
         for job in job_list:
             try:
-                self.repository.save(job)
+                save_result = (
+                    self.repository.save(job)
+                )
 
             except Exception as exc:
-                self._persistence_stats["failed"] += 1
+                self._persistence_stats[
+                    "failed"
+                ] += 1
 
                 self.persistence_errors.append(
                     f"{job.identity} : {exc}"
@@ -287,15 +277,31 @@ class JobService:
 
                 continue
 
-            self._persistence_stats["saved"] += 1
+            self._persistence_stats[
+                "saved"
+            ] += 1
+
+            if isinstance(
+                save_result,
+                RepositorySaveResult,
+            ):
+                self.last_save_results.append(
+                    save_result
+                )
+
+                self._persistence_actions[
+                    save_result.action
+                ] += 1
+            else:
+                # Compatibilité avec les repositories de test
+                # V3.8 dont save() retourne None.
+                self._persistence_actions[
+                    "unknown"
+                ] += 1
 
     def _empty_persistence_stats(
         self,
     ) -> dict[str, Any]:
-        """
-        Produit une structure stable de statistiques.
-        """
-
         return {
             "enabled": self.persistence_enabled,
             "attempted": 0,
@@ -304,18 +310,25 @@ class JobService:
         }
 
     @staticmethod
+    def _empty_persistence_actions(
+    ) -> dict[str, int]:
+        return {
+            "inserted": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "unknown": 0,
+        }
+
+    @staticmethod
     def _extract_provider_errors(
         aggregation_result: AggregationResult,
     ) -> list[str]:
-        """
-        Convertit les erreurs de l'agrégateur dans le format
-        historique de JobService.
-        """
-
         errors: list[str] = []
 
         for provider_name, stats in (
-            aggregation_result.provider_stats.items()
+            aggregation_result
+            .provider_stats
+            .items()
         ):
             if not stats.error:
                 continue

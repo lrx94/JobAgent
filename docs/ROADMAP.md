@@ -144,3 +144,14 @@ Le premier MVP devra être capable de :
 * calculer un score de matching ;
 * expliquer ce score ;
 * produire un rapport exploitable par un candidat.
+
+
+## V3.9.0 — Historisation et veille emploi ✅
+
+- [x] Détection des nouvelles offres
+- [x] Détection des mises à jour
+- [x] Détection des offres inchangées
+- [x] Compteur d'observations
+- [x] Historique des dates
+- [x] Requêtes analytiques du repository
+- [x] Statistiques globales et par source

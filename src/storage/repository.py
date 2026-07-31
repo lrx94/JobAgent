@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from src.domain import Job
@@ -9,11 +10,20 @@ from src.storage.database import (
     get_connection,
     init_database,
 )
+from src.storage.save_result import (
+    RepositorySaveResult,
+)
 
 
 class JobRepository:
     """
     Repository SQLite des offres d'emploi canoniques.
+
+    La sauvegarde distingue désormais :
+
+    - inserted : première découverte ;
+    - updated : contenu métier modifié ;
+    - unchanged : offre déjà connue sans changement.
     """
 
     def __init__(self) -> None:
@@ -22,40 +32,61 @@ class JobRepository:
     def save(
         self,
         job: Job,
-    ) -> None:
+    ) -> RepositorySaveResult:
+        """
+        Insère ou actualise une offre.
+
+        La modification de `collected_at` seule ne transforme pas
+        une offre inchangée en offre mise à jour.
+        """
+
         if not isinstance(job, Job):
             raise TypeError(
                 "JobRepository.save attend un objet Job."
             )
 
-        conn = get_connection()
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
+            cursor = connection.cursor()
 
-            existing_id = self._find_existing_id(
+            existing_row = self._find_existing_row(
                 cursor,
                 job,
             )
 
             values = self._job_values(job)
+            content_hash = self._content_hash(values)
+            now = datetime.now().isoformat()
 
-            if existing_id is None:
-                self._insert(
-                    cursor,
-                    values,
+            if existing_row is None:
+                result = self._insert_new_job(
+                    cursor=cursor,
+                    job=job,
+                    values=values,
+                    content_hash=content_hash,
+                    now=now,
                 )
             else:
-                self._update(
-                    cursor,
-                    existing_id,
-                    values,
+                result = self._save_existing_job(
+                    cursor=cursor,
+                    job=job,
+                    existing_row=existing_row,
+                    values=values,
+                    content_hash=content_hash,
+                    now=now,
                 )
 
-            conn.commit()
+            connection.commit()
+
+            return result
+
+        except Exception:
+            connection.rollback()
+            raise
 
         finally:
-            conn.close()
+            connection.close()
 
     def exists(
         self,
@@ -64,10 +95,10 @@ class JobRepository:
         if not url:
             return False
 
-        conn = get_connection()
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
+            cursor = connection.cursor()
 
             cursor.execute(
                 """
@@ -82,14 +113,16 @@ class JobRepository:
             return cursor.fetchone() is not None
 
         finally:
-            conn.close()
+            connection.close()
 
     def get_all(self) -> list[Job]:
         return self._fetch_jobs(
             """
             SELECT *
             FROM jobs
-            ORDER BY score DESC, created_at DESC
+            ORDER BY score DESC,
+                     first_seen_at DESC,
+                     id DESC
             """
         )
 
@@ -102,16 +135,294 @@ class JobRepository:
             SELECT *
             FROM jobs
             WHERE source = ?
-            ORDER BY score DESC, created_at DESC
+            ORDER BY score DESC,
+                     first_seen_at DESC,
+                     id DESC
             """,
             (source,),
         )
 
-    def count(self) -> int:
-        conn = get_connection()
+    def get_new_jobs(
+        self,
+        days: int = 1,
+    ) -> list[Job]:
+        """
+        Retourne les offres découvertes dans la période donnée.
+        """
+
+        threshold = self._threshold(days)
+
+        return self._fetch_jobs(
+            """
+            SELECT *
+            FROM jobs
+            WHERE first_seen_at >= ?
+            ORDER BY first_seen_at DESC,
+                     score DESC,
+                     id DESC
+            """,
+            (threshold,),
+        )
+
+    def get_updated_jobs(
+        self,
+        days: int = 1,
+    ) -> list[Job]:
+        """
+        Retourne les offres réellement modifiées récemment.
+        """
+
+        threshold = self._threshold(days)
+
+        return self._fetch_jobs(
+            """
+            SELECT *
+            FROM jobs
+            WHERE last_action = 'updated'
+              AND updated_at >= ?
+            ORDER BY updated_at DESC,
+                     score DESC,
+                     id DESC
+            """,
+            (threshold,),
+        )
+
+    def get_recent_jobs(
+        self,
+        days: int = 7,
+    ) -> list[Job]:
+        """
+        Retourne les offres observées pendant la période.
+        """
+
+        threshold = self._threshold(days)
+
+        return self._fetch_jobs(
+            """
+            SELECT *
+            FROM jobs
+            WHERE last_seen_at >= ?
+            ORDER BY last_seen_at DESC,
+                     score DESC,
+                     id DESC
+            """,
+            (threshold,),
+        )
+
+    def get_best_jobs(
+        self,
+        limit: int = 20,
+        minimum_score: float = 0,
+    ) -> list[Job]:
+        """
+        Retourne les meilleures offres enregistrées.
+        """
+
+        normalized_limit = max(
+            1,
+            int(limit),
+        )
+
+        return self._fetch_jobs(
+            """
+            SELECT *
+            FROM jobs
+            WHERE score >= ?
+            ORDER BY score DESC,
+                     last_seen_at DESC,
+                     id DESC
+            LIMIT ?
+            """,
+            (
+                float(minimum_score),
+                normalized_limit,
+            ),
+        )
+
+    def get_statistics(self) -> dict[str, Any]:
+        """
+        Produit les statistiques globales de la base.
+        """
+
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
+            cursor = connection.cursor()
+
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_jobs,
+                    COALESCE(AVG(score), 0)
+                        AS average_score,
+                    COALESCE(MAX(score), 0)
+                        AS best_score,
+                    SUM(
+                        CASE
+                            WHEN remote_type = 'remote'
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS remote_jobs,
+                    SUM(
+                        CASE
+                            WHEN score >= 80
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS excellent_jobs,
+                    SUM(
+                        CASE
+                            WHEN first_seen_at >= ?
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS new_today,
+                    SUM(
+                        CASE
+                            WHEN last_action = 'updated'
+                             AND updated_at >= ?
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) AS updated_today
+                FROM jobs
+                """,
+                (
+                    self._threshold(1),
+                    self._threshold(1),
+                ),
+            )
+
+            summary_row = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT
+                    source,
+                    COUNT(*) AS total,
+                    COALESCE(AVG(score), 0)
+                        AS average_score,
+                    COALESCE(MAX(score), 0)
+                        AS best_score
+                FROM jobs
+                GROUP BY source
+                ORDER BY total DESC,
+                         source ASC
+                """
+            )
+
+            source_rows = cursor.fetchall()
+
+            cursor.execute(
+                """
+                SELECT MAX(last_seen_at)
+                FROM jobs
+                """
+            )
+
+            last_sync_row = cursor.fetchone()
+
+            return {
+                "total_jobs": int(
+                    summary_row["total_jobs"] or 0
+                ),
+                "average_score": round(
+                    float(
+                        summary_row["average_score"]
+                        or 0
+                    ),
+                    2,
+                ),
+                "best_score": float(
+                    summary_row["best_score"] or 0
+                ),
+                "remote_jobs": int(
+                    summary_row["remote_jobs"] or 0
+                ),
+                "excellent_jobs": int(
+                    summary_row["excellent_jobs"] or 0
+                ),
+                "new_today": int(
+                    summary_row["new_today"] or 0
+                ),
+                "updated_today": int(
+                    summary_row["updated_today"] or 0
+                ),
+                "last_sync_at": (
+                    last_sync_row[0]
+                    if last_sync_row
+                    else None
+                ),
+                "sources": {
+                    str(row["source"]): {
+                        "total": int(
+                            row["total"] or 0
+                        ),
+                        "average_score": round(
+                            float(
+                                row["average_score"]
+                                or 0
+                            ),
+                            2,
+                        ),
+                        "best_score": float(
+                            row["best_score"] or 0
+                        ),
+                    }
+                    for row in source_rows
+                },
+            }
+
+        finally:
+            connection.close()
+
+    def get_job_metadata(
+        self,
+        job: Job,
+    ) -> dict[str, Any] | None:
+        """
+        Retourne les métadonnées historiques d'une offre.
+        """
+
+        if not isinstance(job, Job):
+            raise TypeError(
+                "get_job_metadata attend un objet Job."
+            )
+
+        connection = get_connection()
+
+        try:
+            cursor = connection.cursor()
+
+            row = self._find_existing_row(
+                cursor,
+                job,
+            )
+
+            if row is None:
+                return None
+
+            return {
+                "id": int(row["id"]),
+                "content_hash": row["content_hash"],
+                "first_seen_at": row["first_seen_at"],
+                "last_seen_at": row["last_seen_at"],
+                "updated_at": row["updated_at"],
+                "seen_count": int(
+                    row["seen_count"] or 1
+                ),
+                "last_action": row["last_action"],
+            }
+
+        finally:
+            connection.close()
+
+    def count(self) -> int:
+        connection = get_connection()
+
+        try:
+            cursor = connection.cursor()
 
             cursor.execute(
                 "SELECT COUNT(*) FROM jobs"
@@ -120,48 +431,158 @@ class JobRepository:
             return int(cursor.fetchone()[0])
 
         finally:
-            conn.close()
+            connection.close()
 
     def delete(
         self,
         url: str,
     ) -> None:
-        conn = get_connection()
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
+            cursor = connection.cursor()
 
             cursor.execute(
                 "DELETE FROM jobs WHERE url = ?",
                 (url,),
             )
 
-            conn.commit()
+            connection.commit()
 
         finally:
-            conn.close()
+            connection.close()
 
     def clear(self) -> None:
-        conn = get_connection()
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM jobs")
-            conn.commit()
+            cursor = connection.cursor()
+
+            cursor.execute(
+                "DELETE FROM jobs"
+            )
+
+            connection.commit()
 
         finally:
-            conn.close()
+            connection.close()
+
+    def _insert_new_job(
+        self,
+        cursor,
+        job: Job,
+        values: dict[str, Any],
+        content_hash: str,
+        now: str,
+    ) -> RepositorySaveResult:
+        history_values = {
+            **values,
+            "content_hash": content_hash,
+            "first_seen_at": now,
+            "last_seen_at": now,
+            "updated_at": now,
+            "seen_count": 1,
+            "last_action": "inserted",
+        }
+
+        job_id = self._insert(
+            cursor,
+            history_values,
+        )
+
+        return RepositorySaveResult(
+            action="inserted",
+            job_id=job_id,
+            identity=job.identity,
+            seen_count=1,
+        )
+
+    def _save_existing_job(
+        self,
+        cursor,
+        job: Job,
+        existing_row,
+        values: dict[str, Any],
+        content_hash: str,
+        now: str,
+    ) -> RepositorySaveResult:
+        job_id = int(existing_row["id"])
+
+        previous_hash = (
+            existing_row["content_hash"]
+            or self._row_content_hash(existing_row)
+        )
+
+        previous_seen_count = int(
+            existing_row["seen_count"] or 1
+        )
+
+        seen_count = previous_seen_count + 1
+
+        if previous_hash == content_hash:
+            cursor.execute(
+                """
+                UPDATE jobs
+                SET collected_at = ?,
+                    last_seen_at = ?,
+                    seen_count = ?,
+                    last_action = 'unchanged',
+                    content_hash = ?
+                WHERE id = ?
+                """,
+                (
+                    values["collected_at"],
+                    now,
+                    seen_count,
+                    content_hash,
+                    job_id,
+                ),
+            )
+
+            return RepositorySaveResult(
+                action="unchanged",
+                job_id=job_id,
+                identity=job.identity,
+                seen_count=seen_count,
+            )
+
+        update_values = {
+            **values,
+            "content_hash": content_hash,
+            "last_seen_at": now,
+            "updated_at": now,
+            "seen_count": seen_count,
+            "last_action": "updated",
+        }
+
+        self._update(
+            cursor,
+            job_id,
+            update_values,
+        )
+
+        return RepositorySaveResult(
+            action="updated",
+            job_id=job_id,
+            identity=job.identity,
+            seen_count=seen_count,
+        )
 
     def _fetch_jobs(
         self,
         query: str,
         parameters: tuple[Any, ...] = (),
     ) -> list[Job]:
-        conn = get_connection()
+        connection = get_connection()
 
         try:
-            cursor = conn.cursor()
-            cursor.execute(query, parameters)
+            cursor = connection.cursor()
+
+            cursor.execute(
+                query,
+                parameters,
+            )
+
             rows = cursor.fetchall()
 
             return [
@@ -170,17 +591,17 @@ class JobRepository:
             ]
 
         finally:
-            conn.close()
+            connection.close()
 
     @staticmethod
-    def _find_existing_id(
+    def _find_existing_row(
         cursor,
         job: Job,
-    ) -> int | None:
+    ):
         if job.external_id:
             cursor.execute(
                 """
-                SELECT id
+                SELECT *
                 FROM jobs
                 WHERE source = ?
                   AND external_id = ?
@@ -195,12 +616,12 @@ class JobRepository:
             row = cursor.fetchone()
 
             if row is not None:
-                return int(row["id"])
+                return row
 
         if job.url:
             cursor.execute(
                 """
-                SELECT id
+                SELECT *
                 FROM jobs
                 WHERE url = ?
                 LIMIT 1
@@ -211,7 +632,7 @@ class JobRepository:
             row = cursor.fetchone()
 
             if row is not None:
-                return int(row["id"])
+                return row
 
         return None
 
@@ -246,10 +667,12 @@ class JobRepository:
             "skills": json.dumps(
                 job.skills,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "languages": json.dumps(
                 job.languages,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "experience_level": (
                 job.experience_level
@@ -260,29 +683,107 @@ class JobRepository:
             "raw_data": json.dumps(
                 job.raw_data,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "score": job.score,
             "matched_skills": json.dumps(
                 job.matched_skills,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "missing_skills": json.dumps(
                 job.missing_skills,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "match_details": json.dumps(
                 job.match_details,
                 ensure_ascii=False,
+                sort_keys=True,
             ),
             "explanation": job.explanation,
         }
 
     @staticmethod
+    def _content_hash(
+        values: dict[str, Any],
+    ) -> str:
+        """
+        Calcule une empreinte stable du contenu significatif.
+
+        `collected_at` est volontairement exclu : sa modification
+        indique une nouvelle observation, pas une modification.
+        """
+
+        content = {
+            key: value
+            for key, value in values.items()
+            if key != "collected_at"
+        }
+
+        serialized = json.dumps(
+            content,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+
+        return hashlib.sha256(
+            serialized.encode("utf-8")
+        ).hexdigest()
+
+    @classmethod
+    def _row_content_hash(
+        cls,
+        row,
+    ) -> str:
+        keys = set(row.keys())
+
+        values = {
+            column: (
+                row[column]
+                if column in keys
+                else None
+            )
+            for column in (
+                "external_id",
+                "title",
+                "company",
+                "location",
+                "description",
+                "source",
+                "url",
+                "contract_type",
+                "salary_min",
+                "salary_max",
+                "salary_currency",
+                "salary_period",
+                "remote_type",
+                "published_at",
+                "collected_at",
+                "skills",
+                "languages",
+                "experience_level",
+                "experience_years",
+                "raw_data",
+                "score",
+                "matched_skills",
+                "missing_skills",
+                "match_details",
+                "explanation",
+            )
+        }
+
+        return cls._content_hash(values)
+
+    @staticmethod
     def _insert(
         cursor,
         values: dict[str, Any],
-    ) -> None:
+    ) -> int:
         columns = ", ".join(values.keys())
+
         placeholders = ", ".join(
             "?"
             for _ in values
@@ -295,6 +796,8 @@ class JobRepository:
             """,
             tuple(values.values()),
         )
+
+        return int(cursor.lastrowid)
 
     @staticmethod
     def _update(
@@ -327,10 +830,14 @@ class JobRepository:
             name: str,
             default=None,
         ):
+            if name not in keys:
+                return default
+
+            row_value = row[name]
+
             return (
-                row[name]
-                if name in keys
-                and row[name] is not None
+                row_value
+                if row_value is not None
                 else default
             )
 
@@ -349,7 +856,10 @@ class JobRepository:
                 "description",
                 "",
             ),
-            source=value("source", "Inconnu"),
+            source=value(
+                "source",
+                "Inconnu",
+            ),
             url=value("url"),
             contract_type=value("contract_type"),
             salary_min=value("salary_min"),
@@ -390,20 +900,31 @@ class JobRepository:
             raw_data=JobRepository._parse_json_dict(
                 value("raw_data", "{}")
             ),
-            score=float(value("score", 0)),
+            score=float(
+                value("score", 0)
+            ),
             matched_skills=(
                 JobRepository._parse_json_list(
-                    value("matched_skills", "[]")
+                    value(
+                        "matched_skills",
+                        "[]",
+                    )
                 )
             ),
             missing_skills=(
                 JobRepository._parse_json_list(
-                    value("missing_skills", "[]")
+                    value(
+                        "missing_skills",
+                        "[]",
+                    )
                 )
             ),
             match_details=(
                 JobRepository._parse_json_dict(
-                    value("match_details", "{}")
+                    value(
+                        "match_details",
+                        "{}",
+                    )
                 )
             ),
             explanation=value(
@@ -420,7 +941,9 @@ class JobRepository:
             return None
 
         try:
-            return datetime.fromisoformat(value)
+            return datetime.fromisoformat(
+                str(value)
+            )
         except (TypeError, ValueError):
             return None
 
@@ -429,19 +952,51 @@ class JobRepository:
         value: str | None,
     ) -> list[str]:
         try:
-            decoded = json.loads(value or "[]")
-        except (TypeError, json.JSONDecodeError):
+            decoded = json.loads(
+                value or "[]"
+            )
+        except (
+            TypeError,
+            json.JSONDecodeError,
+        ):
             return []
 
-        return decoded if isinstance(decoded, list) else []
+        return (
+            decoded
+            if isinstance(decoded, list)
+            else []
+        )
 
     @staticmethod
     def _parse_json_dict(
         value: str | None,
     ) -> dict[str, Any]:
         try:
-            decoded = json.loads(value or "{}")
-        except (TypeError, json.JSONDecodeError):
+            decoded = json.loads(
+                value or "{}"
+            )
+        except (
+            TypeError,
+            json.JSONDecodeError,
+        ):
             return {}
 
-        return decoded if isinstance(decoded, dict) else {}
+        return (
+            decoded
+            if isinstance(decoded, dict)
+            else {}
+        )
+
+    @staticmethod
+    def _threshold(
+        days: int,
+    ) -> str:
+        normalized_days = max(
+            0,
+            int(days),
+        )
+
+        return (
+            datetime.now()
+            - timedelta(days=normalized_days)
+        ).isoformat()

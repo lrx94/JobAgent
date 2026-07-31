@@ -7,7 +7,32 @@ from unittest.mock import patch
 
 from src.domain import Job
 from src.services.job_service import JobService
+from src.storage.save_result import (
+    RepositorySaveResult,
+)
 
+class HistoricalFakeRepository:
+    def __init__(self) -> None:
+        self.saved_jobs: list[Job] = []
+
+    def save(
+        self,
+        job: Job,
+    ) -> RepositorySaveResult:
+        self.saved_jobs.append(job)
+
+        action = (
+            "inserted"
+            if len(self.saved_jobs) == 1
+            else "unchanged"
+        )
+
+        return RepositorySaveResult(
+            action=action,
+            job_id=1,
+            identity=job.identity,
+            seen_count=len(self.saved_jobs),
+        )
 
 @dataclass
 class FakeMatchResult:
@@ -168,6 +193,81 @@ def create_job(
 
 class TestJobServicePersistence(unittest.TestCase):
 
+
+    def test_exposes_repository_actions(self):
+        jobs = [
+            create_job("job-1"),
+            create_job("job-1"),
+        ]
+
+        repository = (
+            HistoricalFakeRepository()
+        )
+
+        service = JobService(
+            aggregator=FakeAggregator(jobs),
+            engine=FakeMatchingEngine(),
+            repository=repository,
+            persistence_enabled=True,
+        )
+
+        with patch(
+            "src.services.job_service."
+            "SearchRequest.from_profile",
+            return_value=object(),
+        ):
+            service.search(
+                profile=object()
+            )
+
+        self.assertEqual(
+            service.persistence_actions,
+            {
+                "inserted": 1,
+                "updated": 0,
+                "unchanged": 1,
+                "unknown": 0,
+            },
+        )
+
+        self.assertEqual(
+            len(service.last_save_results),
+            2,
+        )
+
+    def test_legacy_repository_is_counted_as_unknown(self):
+        jobs = [
+            create_job("job-1"),
+        ]
+
+        repository = FakeRepository()
+
+        service = JobService(
+            aggregator=FakeAggregator(jobs),
+            engine=FakeMatchingEngine(),
+            repository=repository,
+            persistence_enabled=True,
+        )
+
+        with patch(
+            "src.services.job_service."
+            "SearchRequest.from_profile",
+            return_value=object(),
+        ):
+            service.search(
+                profile=object()
+            )
+
+        self.assertEqual(
+            service.persistence_actions,
+            {
+                "inserted": 0,
+                "updated": 0,
+                "unchanged": 0,
+                "unknown": 1,
+            },
+        )
+        
     def test_persists_every_matched_job(self):
         jobs = [
             create_job("job-1"),
