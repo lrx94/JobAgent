@@ -1,64 +1,109 @@
-from .skill_matcher import SkillMatcher
-from .scorer import Scorer
+from __future__ import annotations
+
 from .models import MatchResult
+from .scorer import Scorer
+from .skill_matcher import SkillMatcher
 
 
 class MatchingEngine:
+    """
+    Orchestre le matching des compétences et le calcul du score global.
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.matcher = SkillMatcher()
         self.scorer = Scorer()
 
-    def match(self, profile, job):
+    def match(
+        self,
+        profile,
+        job,
+    ) -> MatchResult:
+        """
+        Compare un profil à une offre et retourne un résultat
+        détaillé et explicable.
+        """
 
-        matched, partial, missing = self.matcher.match(
-            profile.keywords,
-            job.title + " " + job.description,
+        profile_skills = list(
+            getattr(profile, "keywords", []) or []
         )
 
-        # Score des compétences
-        # Une compétence proche compte pour un demi-match.
-        weighted_matches = (
-            len(matched)
-            + 0.5 * len(partial)
+        job_text = self._build_job_text(job)
+
+        (
+            matched,
+            semantic_matches,
+            missing,
+        ) = self.matcher.match(
+            profile_skills,
+            job_text,
         )
 
-        skill = self.scorer.skill_score(
-            weighted_matches,
-            len(profile.keywords),
+        skill_score = self.scorer.semantic_skill_score(
+            exact_matches=matched,
+            semantic_matches=semantic_matches,
+            total=len(profile_skills),
         )
 
-        location = self.scorer.location_score(
+        location_score = self.scorer.location_score(
             profile,
             job,
         )
 
-        remote = self.scorer.remote_score(
+        remote_score = self.scorer.remote_score(
             profile,
             job,
         )
 
-        salary = self.scorer.salary_score(
+        salary_score = self.scorer.salary_score(
             profile,
             job,
         )
 
-        score = self.scorer.global_score(
-            skill,
-            location,
-            remote,
-            salary,
+        global_score = self.scorer.global_score(
+            skill=skill_score,
+            location=location_score,
+            remote=remote_score,
+            salary=salary_score,
         )
 
         return MatchResult(
-            score=score,
+            score=global_score,
             matched_skills=matched,
+            semantic_matches=semantic_matches,
             missing_skills=missing,
             details={
-                "skills": skill,
-                "semantic_matches": partial,
-                "location": location,
-                "remote": remote,
-                "salary": salary,
+                "skills": skill_score,
+                "exact_matches": matched,
+                "semantic_matches": semantic_matches,
+                "semantic_weight": sum(
+                    match.weight
+                    for match in semantic_matches
+                ),
+                "location": location_score,
+                "remote": remote_score,
+                "salary": salary_score,
             },
+        )
+
+    def _build_job_text(
+        self,
+        job,
+    ) -> str:
+        """
+        Construit le texte analysé à partir des champs disponibles.
+        """
+
+        title = str(
+            getattr(job, "title", "") or ""
+        )
+
+        description = str(
+            getattr(job, "description", "") or ""
+        )
+
+        return " ".join(
+            part
+            for part in (title, description)
+            if part
         )

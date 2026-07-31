@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import streamlit as st
-from src.ui.job_card import display_job
-from src.profile import Profile
+
 from src.profile_manager import ProfileManager
 from src.services.job_service import JobService
-from src.ui.dashboard import display_dashboard
 from src.storage.database import init_database
 from src.storage.repository import JobRepository
+from src.ui.dashboard import display_dashboard
+from src.ui.job_card import display_job
+
 
 # --------------------------------------------------
 # Configuration de la page
@@ -14,149 +17,258 @@ from src.storage.repository import JobRepository
 st.set_page_config(
     page_title="JobAgent",
     page_icon="🤖",
-    layout="wide"
+    layout="wide",
 )
 
 st.title("🚀 JobAgent")
-st.caption("Votre assistant intelligent de recherche d'emploi")
+st.caption(
+    "Votre assistant intelligent de recherche d'emploi"
+)
 
 st.divider()
+
+
+# --------------------------------------------------
+# Initialisation des services
+# --------------------------------------------------
+
+@st.cache_resource
+def create_job_service() -> JobService:
+    """
+    Crée une instance unique du service de recherche.
+    """
+
+    return JobService()
+
+
+@st.cache_resource
+def create_repository() -> JobRepository:
+    """
+    Initialise la base et crée une instance unique du repository.
+    """
+
+    init_database()
+
+    return JobRepository()
+
+
+profile_manager = ProfileManager()
+job_service = create_job_service()
+job_repository = create_repository()
+
 
 # --------------------------------------------------
 # Chargement des profils
 # --------------------------------------------------
 
-pm = ProfileManager()
-profiles = pm.list_profiles()
+profile_names = profile_manager.list_profiles()
 
-if not profiles:
-    st.error("Aucun profil trouvé.")
+if not profile_names:
+    st.error(
+        "Aucun profil valide n'a été trouvé dans le dossier profiles."
+    )
     st.stop()
 
-profile_names = [p["name"] for p in profiles]
-
-selected_profile = st.sidebar.selectbox(
+selected_profile_name = st.sidebar.selectbox(
     "Profil",
-    profile_names
+    profile_names,
 )
 
-profile_data = next(
-    p for p in profiles
-    if p["name"] == selected_profile
-)
+try:
+    profile = profile_manager.load_profile(
+        selected_profile_name
+    )
 
-profile = Profile(
-    name=profile_data["name"],
-    keywords=profile_data.get("keywords", []),
-    locations=profile_data.get("locations", []),
-    salary_min=profile_data.get("salary_min", 0),
-    remote=profile_data.get("remote", False)
-)
+except (FileNotFoundError, ValueError, OSError) as error:
+    st.error(
+        "Impossible de charger le profil sélectionné."
+    )
+
+    st.exception(error)
+    st.stop()
+
 
 # --------------------------------------------------
 # Informations du profil
 # --------------------------------------------------
 
 st.sidebar.markdown("---")
-
-st.sidebar.write("### Compétences")
-
-for skill in profile.keywords:
-    st.sidebar.write("✅", skill)
+st.sidebar.write("### 👤 Profil")
+st.sidebar.write(profile.name)
 
 st.sidebar.markdown("---")
+st.sidebar.write("### 🛠️ Compétences")
 
-st.sidebar.write("📍 Localisation")
+if profile.keywords:
+    for skill in profile.keywords:
+        st.sidebar.write(f"✅ {skill}")
+else:
+    st.sidebar.write("Aucune compétence définie")
+
+st.sidebar.markdown("---")
+st.sidebar.write("### 📍 Localisation")
 
 if profile.locations:
-    st.sidebar.write(", ".join(profile.locations))
+    st.sidebar.write(
+        ", ".join(profile.locations)
+    )
 else:
     st.sidebar.write("Toutes")
 
 st.sidebar.markdown("---")
-
-st.sidebar.write("💰 Salaire minimum")
+st.sidebar.write("### 💰 Salaire minimum")
 
 if profile.salary_min:
-    st.sidebar.write(f"{profile.salary_min:,} €".replace(",", " "))
+    formatted_salary = (
+        f"{profile.salary_min:,}"
+        .replace(",", " ")
+    )
+
+    st.sidebar.write(
+        f"{formatted_salary} €"
+    )
 else:
     st.sidebar.write("Non défini")
 
 st.sidebar.markdown("---")
+st.sidebar.write("### 🏠 Télétravail")
+st.sidebar.write(
+    "Oui"
+    if profile.remote
+    else "Non"
+)
 
-st.sidebar.write("🏠 Télétravail")
-
-st.sidebar.write("Oui" if profile.remote else "Non")
 
 # --------------------------------------------------
-# Recherche
+# Résumé de la recherche
 # --------------------------------------------------
 
-service = JobService()
+st.subheader("🎯 Paramètres de recherche")
+
+column_profile, column_skills, column_location, column_remote = (
+    st.columns(4)
+)
+
+displayed_keywords = (
+    ", ".join(profile.keywords[:3])
+    if profile.keywords
+    else "-"
+)
+
+if len(profile.keywords) > 3:
+    displayed_keywords += "…"
+
+displayed_locations = (
+    ", ".join(profile.locations)
+    if profile.locations
+    else "Toutes"
+)
+
+column_profile.metric(
+    "👤 Profil",
+    profile.name,
+)
+
+column_skills.metric(
+    "🛠️ Compétences",
+    displayed_keywords,
+)
+
+column_location.metric(
+    "📍 Zone",
+    displayed_locations,
+)
+
+column_remote.metric(
+    "🏠 Remote",
+    "Oui"
+    if profile.remote
+    else "Non",
+)
+
+st.divider()
 
 
-init_database()
+# --------------------------------------------------
+# Recherche des offres
+# --------------------------------------------------
 
-repository = JobRepository()
+search_clicked = st.button(
+    "🔍 Rechercher des offres",
+    use_container_width=True,
+    type="primary",
+)
 
-if st.button("🔍 Rechercher des offres", use_container_width=True):
+if search_clicked:
+    try:
+        with st.spinner(
+            "Recherche et analyse des offres en cours..."
+        ):
+            jobs = job_service.search(profile)
 
-    with st.spinner("Recherche des offres..."):
+            if jobs is None:
+                jobs = []
 
-        jobs = service.search(profile)
-        for job in jobs:
-            repository.save(job)
-        display_dashboard(jobs)
-        if jobs:
-            best_score = max(job.score for job in jobs)
-            average = round(
-                sum(job.score for job in jobs) / len(jobs)
-            )
-            keywords = ", ".join(profile.keywords[:3]) if profile.keywords else "Aucun"
-            locations = ", ".join(profile.locations) if profile.locations else "Toutes"
-            remote = "Oui" if profile.remote else "Non"
+            for job in jobs:
+                try:
+                    job_repository.save(job)
 
-            st.subheader("🎯 Recherche")
+                except Exception as repository_error:
+                    st.warning(
+                        "Une offre n'a pas pu être enregistrée "
+                        "dans la base locale."
+                    )
 
-            c1, c2, c3, c4 = st.columns(4)
+                    st.caption(
+                        str(repository_error)
+                    )
 
-            keywords = ", ".join(profile.keywords[:3]) if profile.keywords else "-"
+    except Exception as search_error:
+        st.error(
+            "Une erreur est survenue pendant la recherche."
+        )
 
-            locations = ", ".join(profile.locations) if profile.locations else "Toutes"
+        st.exception(search_error)
+        st.stop()
 
-            c1.metric(
-                "👤 Profil",
-                profile.name,
-            )
+    if not jobs:
+        st.warning(
+            "Aucune offre n'a été trouvée pour ce profil."
+        )
 
-            c2.metric(
-                "🛠️ Compétences",
-                keywords,
-            )
+        st.stop()
 
-            c3.metric(
-                "📍 Zone",
-                locations,
-            )
+    scores = [
+        float(getattr(job, "score", 0) or 0)
+        for job in jobs
+    ]
 
-            c4.metric(
-                "🏠 Remote",
-                "Oui" if profile.remote else "Non",
-            )
+    best_score = round(
+        max(scores)
+    )
 
-            st.divider()
-            st.caption(
-                f"🔍 {len(jobs)} offres analysées • "
-                f"🏆 Meilleur score : {best_score}% • "
-                f"⭐ Moyenne : {average}%"
-            )
+    average_score = round(
+        sum(scores) / len(scores)
+    )
 
-            st.divider()
+    st.success(
+        f"{len(jobs)} offre(s) trouvée(s)"
+    )
 
-    st.success(f"{len(jobs)} offre(s) trouvée(s)")
+    st.caption(
+        f"🔍 {len(jobs)} offres analysées • "
+        f"🏆 Meilleur score : {best_score}% • "
+        f"⭐ Moyenne : {average_score}%"
+    )
 
     st.divider()
 
-    for job in jobs:
+    # Vue synthétique du tableau de bord.
+    display_dashboard(jobs)
 
-         display_job(job)
+    st.divider()
+    st.subheader("📋 Détail des offres")
+
+    # Vue détaillée de chaque offre.
+    for job in jobs:
+        display_job(job)
