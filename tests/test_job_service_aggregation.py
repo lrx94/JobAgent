@@ -135,6 +135,7 @@ class TestJobServiceAggregation(unittest.TestCase):
         service = JobService(
             aggregator=aggregator,
             engine=ScoreByTitleEngine(),
+            persistence_enabled=False,
         )
 
         jobs = service.search(
@@ -173,6 +174,7 @@ class TestJobServiceAggregation(unittest.TestCase):
         service = JobService(
             aggregator=aggregator,
             engine=ScoreByTitleEngine(),
+            persistence_enabled=False,
         )
 
         service.search(self.profile)
@@ -210,6 +212,7 @@ class TestJobServiceAggregation(unittest.TestCase):
         service = JobService(
             aggregator=aggregator,
             engine=ScoreByTitleEngine(),
+            persistence_enabled=False,
         )
 
         jobs = service.search(
@@ -246,6 +249,8 @@ class TestJobServiceAggregation(unittest.TestCase):
         service = JobService(
             aggregator=aggregator,
             engine=ScoreByTitleEngine(),
+            persistence_enabled=False,
+
         )
 
         request = SearchRequest.from_profile(
@@ -270,6 +275,7 @@ class TestJobServiceAggregation(unittest.TestCase):
         service = JobService(
             aggregator=JobAggregator([]),
             engine=ScoreByTitleEngine(),
+            persistence_enabled=False,
         )
 
         statistics = service.collection_stats
@@ -299,6 +305,7 @@ class TestJobServiceAggregation(unittest.TestCase):
                 providers=[FirstProvider()],
                 aggregator=aggregator,
                 engine=ScoreByTitleEngine(),
+                persistence_enabled=False,
             )
 
 

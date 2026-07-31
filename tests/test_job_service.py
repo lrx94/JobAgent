@@ -98,6 +98,7 @@ class TestJobService(unittest.TestCase):
         service = JobService(
             providers=[FakeProvider()],
             engine=FakeMatchingEngine(),
+            persistence_enabled=False,
         )
 
         jobs = service.search(
@@ -137,6 +138,7 @@ class TestJobService(unittest.TestCase):
                 FakeProvider(),
             ],
             engine=FakeMatchingEngine(),
+            persistence_enabled=False,
         )
 
         jobs = service.search(
@@ -159,6 +161,7 @@ class TestJobService(unittest.TestCase):
         service = JobService(
             providers=[FakeProvider()],
             engine=FakeMatchingEngine(),
+            persistence_enabled=False,
         )
 
         service.search(self.profile)
