@@ -7,11 +7,10 @@ from .extractor import SkillExtractor
 
 class SkillParser:
     """
-    Transforme un texte représentant une section "Compétences"
-    en une liste d'objets Skill.
+    Transforme une section de compétences en objets métier Skill.
 
-    Cette première version ne fait aucune normalisation
-    ni classification.
+    La préparation et la reconstruction du texte sont déléguées
+    au SkillExtractor.
     """
 
     def __init__(self) -> None:
@@ -20,9 +19,7 @@ class SkillParser:
     def parse(self, text: str) -> list[Skill]:
         lines = self.extractor.extract(text)
 
-        skills: list[Skill] = []
-
-        for line in lines:
-            skills.append(Skill(name=line))
-
-        return skills
+        return [
+            Skill(name=line)
+            for line in lines
+        ]

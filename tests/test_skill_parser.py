@@ -1,38 +1,58 @@
-from src.cv.skills import SkillParser
+from src.cv.skills.parser import SkillParser
+from src.domain import Skill
 
 
-TEXT = """
-Python
-Azure
-Docker
-ITIL
-"""
-
-
-def main() -> None:
-
+def test_parse_empty_text() -> None:
     parser = SkillParser()
 
-    skills = parser.parse(TEXT)
+    result = parser.parse("")
 
-    print("=" * 80)
-    print("SKILL PARSER")
-    print("=" * 80)
+    assert result == []
 
-    print(f"\n{len(skills)} compétence(s)\n")
 
-    for skill in skills:
-        print(skill)
+def test_parse_returns_skill_objects() -> None:
+    parser = SkillParser()
 
-    assert len(skills) == 4
-    assert skills[0].name == "Python"
-    assert skills[1].name == "Azure"
-    assert skills[2].name == "Docker"
-    assert skills[3].name == "ITIL"
+    result = parser.parse(
+        """
+        Architecture SI.
+        Cloud hybride.
+        """
+    )
 
-    print("\n✅ Test OK")
+    assert len(result) == 2
+
+    assert isinstance(result[0], Skill)
+    assert isinstance(result[1], Skill)
+
+    assert result[0].name == "Architecture SI."
+    assert result[1].name == "Cloud hybride."
+
+
+def test_parse_reconstructs_wrapped_skill() -> None:
+    parser = SkillParser()
+
+    result = parser.parse(
+        """
+        Gouvernance
+        Reporting DG/CODIR, KPI,
+        gestion des risques,
+        dépendances et engagements.
+        """
+    )
+
+    assert len(result) == 1
+    assert isinstance(result[0], Skill)
+
+    assert result[0].name == (
+        "Reporting DG/CODIR, KPI, gestion des risques, "
+        "dépendances et engagements."
+    )
 
 
 if __name__ == "__main__":
-    main()
-    
+    test_parse_empty_text()
+    test_parse_returns_skill_objects()
+    test_parse_reconstructs_wrapped_skill()
+
+    print("✅ test_skill_parser OK")

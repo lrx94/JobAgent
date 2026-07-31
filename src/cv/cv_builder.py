@@ -1,10 +1,15 @@
 from __future__ import annotations
-
+from .normalizers import (
+    TextNormalizer,
+    SkillNormalizer,
+    LanguageNormalizer,
+)
 from src.domain import CV
 from .skills import SkillParser
 from .education_parser import EducationParser
 from .experience_parser import ExperienceParser
 from .section_parser import SectionParser
+from .language_parser import LanguageParser
 
 
 class CVBuilder:
@@ -34,7 +39,8 @@ class CVBuilder:
         self.experience_parser = ExperienceParser()
         self.education_parser = EducationParser()
         self.skill_parser = SkillParser()
-
+        self.language_parser = LanguageParser()
+        
     def build(self, text: str) -> CV:
 
         sections = self.section_parser.parse(text)
@@ -46,6 +52,7 @@ class CVBuilder:
         #
 
         cv.summary = sections.get("summary", "").strip()
+        cv.summary = TextNormalizer.normalize(cv.summary)
 
         #
         # Expériences
@@ -70,23 +77,20 @@ class CVBuilder:
         # Langues
         #
 
-        cv.languages = [
-            line.strip()
-            for line in sections.get("languages", "").splitlines()
-            if line.strip()
-        ]
+        cv.languages = self.language_parser.parse(sections.get("languages", "") )
+        
 
         #
         # Compétences
         #
-        skills_text = "\n".join(
-            line.strip()
-            for line in sections.get("skills", "").splitlines()
-            if line.strip()
-            and line.strip() not in self.SKILL_HEADERS
+        cv.skills = self.skill_parser.parse(
+            sections.get("skills", "")
         )
-        cv.skills = self.skill_parser.parse(skills_text)
 
+        for skill in cv.skills:
+            skill.name = SkillNormalizer.normalize(
+                TextNormalizer.normalize(skill.name)
+            )
         #
         # Centres d'intérêt
         #

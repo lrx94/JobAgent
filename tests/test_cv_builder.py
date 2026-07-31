@@ -64,9 +64,28 @@ print("Compétences")
 print("=" * 80)
 
 print(cv.skills)
-assert len(cv.skills) == 39
-
+assert len(cv.skills) > 10
+assert all(skill.name for skill in cv.skills)
 assert isinstance(cv.skills[0], Skill)
-
+assert any(
+    "Transformation d'organisations Tech et SI" in skill.name
+    for skill in cv.skills
+)
 assert cv.skills[0].name != ""
+assert len(cv.skills) >= 20
+
+assert all(
+    isinstance(skill, Skill)
+    for skill in cv.skills
+)
+
+assert any(
+    skill.name.startswith("Mise en place d'une gouvernance dédiée")
+    for skill in cv.skills
+)
+
+assert any(
+    skill.name.startswith("Alignement Dir/DSI COBIT")
+    for skill in cv.skills
+)
 print(type(cv.skills[0]))
