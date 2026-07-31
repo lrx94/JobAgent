@@ -1,53 +1,146 @@
-from pathlib import Path
+from __future__ import annotations
+
 import sqlite3
+from pathlib import Path
+
 
 DB_PATH = Path("data/jobagent.db")
 
 
-def get_connection():
-    DB_PATH.parent.mkdir(exist_ok=True)
+JOB_COLUMNS: dict[str, str] = {
+    "external_id": "TEXT",
+    "contract_type": "TEXT",
+    "salary_min": "INTEGER",
+    "salary_max": "INTEGER",
+    "salary_currency": "TEXT DEFAULT 'EUR'",
+    "salary_period": "TEXT DEFAULT 'unknown'",
+    "remote_type": "TEXT DEFAULT 'unknown'",
+    "published_at": "TEXT",
+    "collected_at": "TEXT",
+    "skills": "TEXT DEFAULT '[]'",
+    "languages": "TEXT DEFAULT '[]'",
+    "experience_level": "TEXT",
+    "experience_years": "INTEGER",
+    "raw_data": "TEXT DEFAULT '{}'",
+    "match_details": "TEXT DEFAULT '{}'",
+    "explanation": "TEXT DEFAULT ''",
+}
+
+
+def get_connection() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     conn = sqlite3.connect(DB_PATH)
-
     conn.row_factory = sqlite3.Row
 
     return conn
 
 
-def init_database():
-
+def init_database() -> None:
     conn = get_connection()
 
-    cur = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS jobs(
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                external_id TEXT,
 
-        title TEXT,
+                title TEXT NOT NULL,
+                company TEXT,
+                location TEXT,
+                description TEXT,
+                source TEXT NOT NULL,
+                url TEXT UNIQUE,
 
-        company TEXT,
+                contract_type TEXT,
 
-        location TEXT,
+                salary_min INTEGER,
+                salary_max INTEGER,
+                salary_currency TEXT DEFAULT 'EUR',
+                salary_period TEXT DEFAULT 'unknown',
 
-        description TEXT,
+                remote_type TEXT DEFAULT 'unknown',
 
-        source TEXT,
+                published_at TEXT,
+                collected_at TEXT,
 
-        url TEXT UNIQUE,
+                skills TEXT DEFAULT '[]',
+                languages TEXT DEFAULT '[]',
 
-        score INTEGER,
+                experience_level TEXT,
+                experience_years INTEGER,
 
-        matched_skills TEXT,
+                raw_data TEXT DEFAULT '{}',
 
-        missing_skills TEXT,
+                score REAL DEFAULT 0,
+                matched_skills TEXT DEFAULT '[]',
+                missing_skills TEXT DEFAULT '[]',
+                match_details TEXT DEFAULT '{}',
+                explanation TEXT DEFAULT '',
 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP
+                    DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
+        _migrate_existing_jobs_table(
+            conn
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+                idx_jobs_source_external_id
+            ON jobs(source, external_id)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS
+                idx_jobs_score
+            ON jobs(score DESC)
+            """
+        )
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+
+def _migrate_existing_jobs_table(
+    conn: sqlite3.Connection,
+) -> None:
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "PRAGMA table_info(jobs)"
     )
-    """)
 
-    conn.commit()
+    existing_columns = {
+        row["name"]
+        for row in cursor.fetchall()
+    }
 
-    conn.close()
+    for column_name, column_definition in (
+        JOB_COLUMNS.items()
+    ):
+        if column_name in existing_columns:
+            continue
+
+        cursor.execute(
+            f"""
+            ALTER TABLE jobs
+            ADD COLUMN {column_name}
+            {column_definition}
+            """
+        )
