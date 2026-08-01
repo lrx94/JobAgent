@@ -7,9 +7,8 @@ from src.domain import Job
 from src.matching.engine import MatchingEngine
 from src.profile import Profile
 from src.providers.base import JobProvider
-from src.providers.france_travail import (
-    FranceTravailProvider,
-)
+from src.providers.remoteok import RemoteOKProvider
+
 from src.search_request import SearchRequest
 from src.services.job_aggregator import (
     AggregationResult,
@@ -47,7 +46,7 @@ class JobService:
             configured_providers = (
                 list(providers)
                 if providers is not None
-                else [FranceTravailProvider()]
+                else [RemoteOKProvider()]
             )
 
             aggregator = JobAggregator(

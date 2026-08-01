@@ -162,27 +162,33 @@ class Scorer:
         )
 
     def global_score(
-        self,
-        skill: int,
-        location: int,
-        remote: int,
-        salary: int,
-    ) -> int:
-        """
-        Calcule le score global et garantit une valeur entre 0 et 100.
-        """
+            self,
+            skill: int,
+            location: int,
+            remote: int,
+            salary: int,
+        ) -> int:
+            """
+            Les compétences sont obligatoires.
 
-        score = round(
-            skill * self.SKILL_WEIGHT
-            + location * self.LOCATION_WEIGHT
-            + remote * self.REMOTE_WEIGHT
-            + salary * self.SALARY_WEIGHT
-        )
+            Sans compétence commune,
+            une offre ne peut pas être considérée pertinente.
+            """
 
-        return max(
-            0,
-            min(score, 100),
-        )
+            if skill == 0:
+                return 0
+
+            score = round(
+                skill * self.SKILL_WEIGHT
+                + location * self.LOCATION_WEIGHT
+                + remote * self.REMOTE_WEIGHT
+                + salary * self.SALARY_WEIGHT
+            )
+
+            return max(
+                0,
+                min(score, 100),
+            )
 
     def _safe_number(
         self,

@@ -1,67 +1,57 @@
 """
-Extraction intelligente des compétences.
+Extraction factuelle des compétences présentes dans un texte.
 
-Utilise :
+L'extracteur recherche uniquement :
+- le nom canonique d'une compétence ;
+- ses synonymes déclarés.
 
-- SkillNormalizer
-- SKILL_SYNONYMS
-- SKILL_GRAPH
+Le graphe de compétences n'est pas utilisé ici, car une compétence
+proche ne doit pas être considérée comme réellement présente dans le CV.
 """
+
+from __future__ import annotations
 
 import re
 
 from src.ai.skill_dictionary import SKILL_SYNONYMS
-from src.ai.skill_graph import SKILL_GRAPH
 from src.ai.skill_normalizer import SkillNormalizer
 
 
 class SkillExtractor:
+    """
+    Extrait les compétences explicitement présentes dans un texte.
+    """
 
     def extract(self, text: str) -> list[str]:
+        if not text:
+            return []
 
-        text = text.lower()
+        normalized_text = text.casefold()
+        found: set[str] = set()
 
-        found = set()
-
-        # Toutes les compétences connues
-        skills = (
-            set(SKILL_SYNONYMS.keys())
-            | set(SKILL_GRAPH.keys())
-        )
-
-        for skill in sorted(skills):
-
+        for skill in sorted(SKILL_SYNONYMS):
             canonical = SkillNormalizer.normalize(skill)
 
-            candidates = [canonical]
-            candidates.extend(
-                SKILL_SYNONYMS.get(
-                    canonical,
-                    [],
-                )
-            )
-
-            related = SKILL_GRAPH.get(
+            candidates = [
                 canonical,
-                {},
-            ).get(
-                "related",
-                [],
-            )
-
-            candidates.extend(related)
+                *SKILL_SYNONYMS.get(canonical, []),
+            ]
 
             for candidate in candidates:
+                normalized_candidate = str(
+                    candidate or ""
+                ).strip().casefold()
+
+                if not normalized_candidate:
+                    continue
 
                 pattern = (
-                    rf"\b{re.escape(candidate.lower())}\b"
+                    r"(?<!\w)"
+                    + re.escape(normalized_candidate)
+                    + r"(?!\w)"
                 )
 
-                if re.search(
-                    pattern,
-                    text,
-                    re.IGNORECASE,
-                ):
+                if re.search(pattern, normalized_text):
                     found.add(canonical)
                     break
 
