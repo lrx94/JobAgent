@@ -155,3 +155,13 @@ Le premier MVP devra être capable de :
 - [x] Historique des dates
 - [x] Requêtes analytiques du repository
 - [x] Statistiques globales et par source
+
+✔ V3.10
+V3.11
+Analyse métier
+
+- Détection automatique du métier
+- Détection de la séniorité
+- Génération automatique de profils
+- Référentiel métier
+- Sélection intelligente des providers

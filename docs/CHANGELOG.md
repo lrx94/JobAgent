@@ -49,3 +49,26 @@
 - JobRepository.save retourne désormais RepositorySaveResult.
 - Migration SQLite automatique vers le schéma V3.9.
 - Suppression de la double sauvegarde éventuelle dans app.py.
+
+## [3.10.0] - 2026-08-01
+
+### Added
+- Premier provider réel RemoteOK.
+- Architecture multi-providers.
+- ProviderRegistry.
+- JobAggregator.
+- Workflow complet CV → RemoteOK.
+- Extraction des compétences depuis un CV.
+- Normalisation des compétences.
+- Matching sémantique.
+- Persistance des offres.
+
+### Changed
+- Les providers ne filtrent plus les compétences.
+- Le matching devient responsable de la pertinence.
+- Les offres sans compétence commune obtiennent désormais un score nul.
+
+### Fixed
+- Réduction des faux positifs.
+- Normalisation des tags RemoteOK.
+- Stabilisation de JobService.
