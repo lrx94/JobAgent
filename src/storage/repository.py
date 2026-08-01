@@ -13,7 +13,7 @@ from src.storage.database import (
 from src.storage.save_result import (
     RepositorySaveResult,
 )
-
+from src.utils.json_utils import json_dumps
 
 class JobRepository:
     """
@@ -666,13 +666,11 @@ class JobRepository:
             ),
             "skills": json.dumps(
                 job.skills,
-                ensure_ascii=False,
-                sort_keys=True,
+              
             ),
             "languages": json.dumps(
                 job.languages,
-                ensure_ascii=False,
-                sort_keys=True,
+                
             ),
             "experience_level": (
                 job.experience_level
@@ -682,24 +680,20 @@ class JobRepository:
             ),
             "raw_data": json.dumps(
                 job.raw_data,
-                ensure_ascii=False,
-                sort_keys=True,
+                
             ),
             "score": job.score,
             "matched_skills": json.dumps(
                 job.matched_skills,
-                ensure_ascii=False,
-                sort_keys=True,
+               
             ),
             "missing_skills": json.dumps(
                 job.missing_skills,
-                ensure_ascii=False,
-                sort_keys=True,
+                
             ),
             "match_details": json.dumps(
                 job.match_details,
-                ensure_ascii=False,
-                sort_keys=True,
+                
             ),
             "explanation": job.explanation,
         }

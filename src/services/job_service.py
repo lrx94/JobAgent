@@ -18,7 +18,9 @@ from src.storage.repository import JobRepository
 from src.storage.save_result import (
     RepositorySaveResult,
 )
-
+from src.utils.json_utils import (
+    to_json_compatible,
+)
 
 class JobService:
     """
@@ -187,37 +189,50 @@ class JobService:
         )
 
     def _apply_matching(
-        self,
-        profile: Profile,
-        job: Job,
-    ) -> None:
-        result = self.engine.match(
-            profile,
-            job,
-        )
+            self,
+            profile: Profile,
+            job: Job,
+        ) -> None:
+            result = self.engine.match(
+                profile,
+                job,
+            )
 
-        job.score = result.score
+            job.score = result.score
 
-        job.matched_skills = list(
-            result.matched_skills
-        )
+            job.matched_skills = list(
+                result.matched_skills
+            )
 
-        job.missing_skills = list(
-            result.missing_skills
-        )
+            job.missing_skills = list(
+                result.missing_skills
+            )
 
-        job.match_details = dict(
-            result.details or {}
-        )
+            serialized_details = (
+                to_json_compatible(
+                    result.details or {}
+                )
+            )
 
-        explanation = getattr(
-            result,
-            "explanation",
-            "",
-        )
+            job.match_details = (
+                serialized_details
+                if isinstance(
+                    serialized_details,
+                    dict,
+                )
+                else {
+                    "value": serialized_details,
+                }
+            )
 
-        if explanation:
-            job.explanation = explanation
+            explanation = getattr(
+                result,
+                "explanation",
+                "",
+            )
+
+            if explanation:
+                job.explanation = explanation
 
     def _persist_jobs(
         self,
