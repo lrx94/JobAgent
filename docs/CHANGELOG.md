@@ -85,3 +85,14 @@
 - Contrôleur d'accès produisant un `UserContext`.
 - Contrôle des rôles applicatifs.
 - Refus par défaut des comptes absents de la liste blanche.
+
+## [3.12.2.4] - 2026-08-02
+
+### Added
+
+- Déploiement privé de JobAgent sur Streamlit Community Cloud.
+- Configuration Google OIDC de production.
+- URI OAuth de production.
+- Secrets sécurisés dans Streamlit Cloud.
+- Authentification Google validée sur l'URL publique.
+- Accès limité aux comptes présents dans la liste blanche.

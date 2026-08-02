@@ -186,3 +186,14 @@ Analyse métier
 - [ ] Protection des pages
 - [ ] Configuration locale secrets.toml
 - [ ] Tests avec passerelle Streamlit simulée
+
+## V3.12.2.4 — Déploiement privé Cloud ✅
+
+- [x] Déploiement Streamlit Community Cloud
+- [x] URL publique
+- [x] Google OIDC Cloud
+- [x] Secrets Cloud
+- [x] Liste blanche
+- [x] Connexion autorisée
+- [x] Déconnexion
+- [ ] Test avec un compte non autorisé
