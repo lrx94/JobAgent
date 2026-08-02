@@ -72,3 +72,16 @@
 - Réduction des faux positifs.
 - Normalisation des tags RemoteOK.
 - Stabilisation de JobService.
+
+## [3.12.2.2] - 2026-08-02
+
+### Added
+
+- Contrat générique `AuthorizationRepository`.
+- Repository JSON de liste blanche.
+- Normalisation et validation des adresses e-mail.
+- Mise en cache et rechargement de la liste blanche.
+- Service d'autorisation indépendant du stockage.
+- Contrôleur d'accès produisant un `UserContext`.
+- Contrôle des rôles applicatifs.
+- Refus par défaut des comptes absents de la liste blanche.

@@ -165,3 +165,24 @@ Analyse métier
 - Génération automatique de profils
 - Référentiel métier
 - Sélection intelligente des providers
+
+## V3.12.2.2 — Domaine d'autorisation ✅
+
+- [x] Contrat AuthorizationRepository
+- [x] Repository de liste blanche
+- [x] Normalisation des e-mails
+- [x] AuthorizationService
+- [x] AccessController
+- [x] Contrôle des rôles
+- [x] Tests unitaires sans Streamlit
+- [x] Refus par défaut
+
+## V3.12.2.3 — Adaptateur Google OIDC
+
+- [ ] Conversion des claims Streamlit en CurrentUser
+- [ ] Écran de connexion
+- [ ] Déconnexion
+- [ ] Protection de app.py
+- [ ] Protection des pages
+- [ ] Configuration locale secrets.toml
+- [ ] Tests avec passerelle Streamlit simulée

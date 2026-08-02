@@ -79,3 +79,4 @@ __pycache__/
 # Streamlit
 .streamlit/secrets.toml
 
+config/allowed_users.json
