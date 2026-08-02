@@ -140,3 +140,30 @@
 - Sélection du CV principal d'un profil.
 - Détachement d'un CV.
 - Suppression protégée des CV encore associés.
+
+
+---
+
+# 21. Changelog
+
+Dans `docs/CHANGELOG.md` :
+
+```markdown
+## [3.13.1] - 2026-08-02
+
+### Added
+
+- Fondation du Career Workspace.
+- Point d'entrée unique `build_workspace()`.
+- Modèle `Workspace`.
+- Agrégat cohérent `WorkspaceServices`.
+- État de navigation indépendant de Streamlit.
+- Vérification de cohérence des utilisateurs et repositories.
+- Partage d'une instance unique de `CVRepository`.
+- Documentation de l'architecture Workspace.
+
+### Changed
+
+- Les pages CV/profils et Mes CV utilisent le même Workspace.
+- Suppression de la construction dupliquée des services utilisateur.
+- Unification de la source de vérité sous `data/users/<user_id>`.

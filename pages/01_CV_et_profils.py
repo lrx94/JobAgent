@@ -14,7 +14,9 @@ from src.career.search_workflow import (
 from src.auth.adapters.streamlit_bootstrap import (
     require_streamlit_user,
 )
-
+from src.workspace import (
+    build_workspace,
+)
 
 st.set_page_config(
     page_title="CV et profils",
@@ -22,6 +24,17 @@ st.set_page_config(
     layout="wide",
 )
 user_context = require_streamlit_user()
+
+workspace = build_workspace(
+    user_context=user_context,
+    storage_root=(
+        Path("data")
+        / "users"
+    ),
+)
+
+service = workspace.profile_service
+
 st.title("📄 CV et profils")
 st.caption(
     "Analysez un CV, choisissez un métier cible, "
@@ -37,16 +50,6 @@ st.caption(
 # ---------------------------------------------------------------------------
 
 
-def create_cv_profile_service(
-    user_context,
-) -> UserCVProfileService:
-    return UserCVProfileService(
-        user_context=user_context,
-        storage_root=(
-            Path("data")
-            / "users"
-        ),
-    )
 
 
 @st.cache_resource
@@ -54,9 +57,7 @@ def create_search_workflow() -> CareerSearchWorkflow:
     return CareerSearchWorkflow()
 
 
-service = create_cv_profile_service(
-    user_context
-)
+
 search_workflow = create_search_workflow()
 
 

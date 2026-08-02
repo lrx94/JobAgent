@@ -264,3 +264,26 @@ Analyse métier
 - [ ] Définir les CV principaux
 - [ ] Générer un rapport de migration
 - [ ] Rendre la migration réexécutable
+
+## V3.13.1 — Career Workspace Foundation ✅
+
+- [x] Package workspace
+- [x] WorkspaceServices
+- [x] WorkspaceState
+- [x] Workspace
+- [x] WorkspaceBuilder
+- [x] Services utilisateur cohérents
+- [x] CVRepository partagé
+- [x] Unification des pages
+- [x] Tests d'isolation
+- [x] Documentation d'architecture
+
+## V3.13.2 — Tree Navigation
+
+- [ ] Modèle de nœud de navigation
+- [ ] Arbre Profils → CV
+- [ ] Profil sélectionné
+- [ ] CV principal signalé
+- [ ] Actions créer, renommer et supprimer
+- [ ] Persistance de la sélection dans la session
+- [ ] Zone centrale synchronisée

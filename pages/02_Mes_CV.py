@@ -7,24 +7,18 @@ import streamlit as st
 from src.auth.adapters.streamlit_bootstrap import (
     require_streamlit_user,
 )
-from src.career.user_cv_profile_service import (
-    UserCVProfileService,
-)
+
 from src.cvs.exceptions import (
     CVAnalysisError,
     CVError,
     CVStillInUseError,
     DuplicateCVError,
 )
-from src.cvs.profile_cv_repository import (
-    ProfileCVRepository,
+
+from src.workspace import (
+    build_workspace,
 )
-from src.cvs.profile_cv_service import (
-    ProfileCVService,
-)
-from src.cvs.repository import (
-    CVRepository,
-)
+
 from src.cvs.service import (
     CVService,
 )
@@ -50,61 +44,19 @@ st.set_page_config(
 user_context = require_streamlit_user()
 
 
-def create_services():
-    """
-    Crée des services liés uniquement à l'utilisateur courant.
+workspace = build_workspace(
+    user_context=user_context,
+    storage_root=STORAGE_ROOT,
+)
 
-    Ne pas placer cette fonction dans st.cache_resource :
-    elle contient un contexte utilisateur.
-    """
-
-    cv_repository = CVRepository(
-        user_context=user_context,
-        storage_root=STORAGE_ROOT,
-    )
-
-    cv_service = CVService(
-        repository=cv_repository
-    )
-
-    profile_service = (
-        UserCVProfileService(
-            user_context=user_context,
-            storage_root=STORAGE_ROOT,
-        )
-    )
-
-    association_repository = (
-        ProfileCVRepository(
-            user_context=user_context,
-            cv_repository=cv_repository,
-            storage_root=STORAGE_ROOT,
-        )
-    )
-
-    association_service = (
-        ProfileCVService(
-            association_repository=(
-                association_repository
-            ),
-            cv_repository=cv_repository,
-        )
-    )
-
-    return (
-        cv_service,
-        profile_service,
-        association_repository,
-        association_service,
-    )
-
-
-(
-    cv_service,
-    profile_service,
-    association_repository,
-    association_service,
-) = create_services()
+cv_service = workspace.cv_service
+profile_service = workspace.profile_service
+association_repository = (
+    workspace.association_repository
+)
+association_service = (
+    workspace.association_service
+)
 
 
 def rerun() -> None:
