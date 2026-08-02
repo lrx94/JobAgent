@@ -110,3 +110,18 @@
 - Création idempotente de l'arborescence utilisateur.
 - Vérification explicite de propriété d'un chemin.
 - Tests d'isolation entre plusieurs utilisateurs.
+
+## [3.12.3.3-A] - 2026-08-02
+
+### Added
+
+- Modèle canonique CVDocument.
+- Bibliothèque de CV indépendante des profils.
+- Repository CV isolé par utilisateur.
+- Import de PDF depuis bytes, flux ou fichier.
+- Métadonnées JSON par CV.
+- Checksum SHA-256 des documents.
+- Détection des CV identiques.
+- Renommage, lecture, liste et suppression des CV.
+- Vérification du propriétaire dans les métadonnées.
+- Tests d'isolation entre plusieurs utilisateurs.

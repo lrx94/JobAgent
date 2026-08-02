@@ -5,7 +5,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.career import CVProfileService
+from src.career.user_cv_profile_service import (
+    UserCVProfileService,
+)
 from src.career.search_workflow import (
     CareerSearchWorkflow,
 )
@@ -25,17 +27,25 @@ st.caption(
     "Analysez un CV, choisissez un métier cible, "
     "créez ou enrichissez un profil puis lancez une recherche."
 )
-
+st.caption(
+    "Espace utilisateur privé : "
+    f"{user_context.display_name}"
+)
 
 # ---------------------------------------------------------------------------
 # Services
 # ---------------------------------------------------------------------------
 
 
-@st.cache_resource
-def create_cv_profile_service() -> CVProfileService:
-    return CVProfileService(
-        profiles_directory="profiles"
+def create_cv_profile_service(
+    user_context,
+) -> UserCVProfileService:
+    return UserCVProfileService(
+        user_context=user_context,
+        storage_root=(
+            Path("data")
+            / "users"
+        ),
     )
 
 
@@ -44,7 +54,9 @@ def create_search_workflow() -> CareerSearchWorkflow:
     return CareerSearchWorkflow()
 
 
-service = create_cv_profile_service()
+service = create_cv_profile_service(
+    user_context
+)
 search_workflow = create_search_workflow()
 
 

@@ -21,7 +21,9 @@ from src.career.provider_advisor import (
 from src.career.role_detector import (
     RoleDetector,
 )
-
+from src.career.user_cv_profile_service import (
+    UserCVProfileService,
+)
 
 __all__ = [
     "CVProfileService",
@@ -35,5 +37,5 @@ __all__ = [
     "ProviderStatus",
     "RoleDetector",
     "RoleSuggestion",
-
+    "UserCVProfileService",
 ]

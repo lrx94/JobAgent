@@ -220,3 +220,26 @@ Analyse métier
 - [ ] Empêcher les lectures croisées
 - [ ] Adapter la page CV et profils
 - [ ] Tests avec deux utilisateurs
+
+## V3.12.3.3-A — Repository multi-CV ✅
+
+- [x] Modèle CVDocument
+- [x] Repository isolé par utilisateur
+- [x] Import de fichiers PDF
+- [x] Métadonnées persistantes
+- [x] Checksum SHA-256
+- [x] Détection des doublons
+- [x] Liste et chargement
+- [x] Renommage
+- [x] Suppression
+- [x] Tests d'accès croisé
+
+## V3.12.3.3-B — Service multi-CV
+
+- [ ] CVService
+- [ ] Limite de taille
+- [ ] Politique de doublons
+- [ ] Analyse du CV après import
+- [ ] Enrichissement du titre
+- [ ] Résultat d'import explicable
+- [ ] Intégration avec CVParser
