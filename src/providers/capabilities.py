@@ -131,7 +131,7 @@ PROVIDER_CAPABILITIES: tuple[
     ProviderCapability(
         provider_id="francetravail",
         label="France Travail",
-        implemented=False,
+        implemented=True,
         requires_configuration=True,
         supported_categories=(
             "technology",

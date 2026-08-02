@@ -7,8 +7,6 @@ from src.domain import Job
 from src.matching.engine import MatchingEngine
 from src.profile import Profile
 from src.providers.base import JobProvider
-from src.providers.remoteok import RemoteOKProvider
-
 from src.search_request import SearchRequest
 from src.services.job_aggregator import (
     AggregationResult,
@@ -21,7 +19,9 @@ from src.storage.save_result import (
 from src.utils.json_utils import (
     to_json_compatible,
 )
-
+from src.providers.provider_factory import (
+    build_default_providers,
+)
 class JobService:
     """
     Orchestre collecte, matching et persistance.
@@ -48,7 +48,7 @@ class JobService:
             configured_providers = (
                 list(providers)
                 if providers is not None
-                else [RemoteOKProvider()]
+                else build_default_providers()
             )
 
             aggregator = JobAggregator(
