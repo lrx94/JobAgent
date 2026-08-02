@@ -6,6 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.career import (
+    CareerSearchWorkflow,
     CVProfileService,
 )
 
@@ -18,9 +19,14 @@ st.set_page_config(
 
 st.title("📄 CV et profils")
 st.caption(
-    "Analysez un CV, choisissez un métier cible "
-    "et créez ou enrichissez un profil JobAgent."
+    "Analysez un CV, choisissez un métier cible, "
+    "créez ou enrichissez un profil puis lancez une recherche."
 )
+
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
 
 
 @st.cache_resource
@@ -30,7 +36,18 @@ def create_cv_profile_service() -> CVProfileService:
     )
 
 
+@st.cache_resource
+def create_search_workflow() -> CareerSearchWorkflow:
+    return CareerSearchWorkflow()
+
+
 service = create_cv_profile_service()
+search_workflow = create_search_workflow()
+
+
+# ---------------------------------------------------------------------------
+# État de session
+# ---------------------------------------------------------------------------
 
 
 def initialize_state() -> None:
@@ -38,11 +55,24 @@ def initialize_state() -> None:
         "cv_analysis": None,
         "cv_temporary_path": None,
         "cv_original_name": None,
+        "career_generated_profile": None,
+        "career_selected_role": None,
+        "career_search_result": None,
+        "career_saved_profile_id": None,
+        "career_search_completed": False,
     }
 
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+initialize_state()
+
+
+# ---------------------------------------------------------------------------
+# Fonctions utilitaires
+# ---------------------------------------------------------------------------
 
 
 def save_uploaded_pdf(
@@ -53,9 +83,10 @@ def save_uploaded_pdf(
     pendant la session Streamlit.
     """
 
-    suffix = Path(
-        uploaded_file.name
-    ).suffix or ".pdf"
+    suffix = (
+        Path(uploaded_file.name).suffix
+        or ".pdf"
+    )
 
     temporary_file = tempfile.NamedTemporaryFile(
         prefix="jobagent_cv_",
@@ -84,7 +115,127 @@ def comma_separated(
     )
 
 
-initialize_state()
+def reset_search_state() -> None:
+    """
+    Supprime les résultats de recherche après modification
+    ou nouvel enregistrement du profil.
+    """
+
+    st.session_state[
+        "career_search_result"
+    ] = None
+
+    st.session_state[
+        "career_search_completed"
+    ] = False
+
+
+def display_provider_statuses(
+    search_result,
+) -> None:
+    st.write("#### État des providers")
+
+    for provider_status in (
+        search_result.provider_statuses
+    ):
+        if provider_status.operational:
+            icon = "✅"
+
+        elif (
+            provider_status.status
+            == "not_configured"
+        ):
+            icon = "⚠️"
+
+        else:
+            icon = "○"
+
+        recommended_label = (
+            " — recommandé"
+            if provider_status.recommended
+            else " — source secondaire"
+        )
+
+        st.write(
+            f"{icon} **{provider_status.label}**"
+            f"{recommended_label} : "
+            f"{provider_status.message}"
+        )
+
+
+def display_job(
+    job,
+) -> None:
+    with st.container(
+        border=True
+    ):
+        st.subheader(
+            job.title
+        )
+
+        job_col1, job_col2 = (
+            st.columns(2)
+        )
+
+        job_col1.write(
+            f"**Entreprise :** "
+            f"{job.company}"
+        )
+
+        job_col2.write(
+            f"**Score :** "
+            f"{job.score:.1f}"
+        )
+
+        st.write(
+            f"**Localisation :** "
+            f"{job.location}"
+        )
+
+        st.write(
+            f"**Source :** "
+            f"{job.source}"
+        )
+
+        if job.matched_skills:
+            st.write(
+                "**Compétences communes :**",
+                ", ".join(
+                    job.matched_skills
+                ),
+            )
+
+        if job.missing_skills:
+            with st.expander(
+                "Compétences absentes",
+                expanded=False,
+            ):
+                st.write(
+                    ", ".join(
+                        job.missing_skills
+                    )
+                )
+
+        if job.explanation:
+            with st.expander(
+                "Explication du score",
+                expanded=False,
+            ):
+                st.write(
+                    job.explanation
+                )
+
+        if job.url:
+            st.link_button(
+                "Voir l'offre",
+                job.url,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Import et analyse du CV
+# ---------------------------------------------------------------------------
+
 
 uploaded_cv = st.file_uploader(
     "Déposer un CV au format PDF",
@@ -97,6 +248,7 @@ analyze_clicked = st.button(
     type="primary",
     use_container_width=True,
     disabled=uploaded_cv is None,
+    key="analyze_cv_button",
 )
 
 if analyze_clicked and uploaded_cv is not None:
@@ -128,6 +280,20 @@ if analyze_clicked and uploaded_cv is not None:
             "cv_original_name"
         ] = uploaded_cv.name
 
+        st.session_state[
+            "career_generated_profile"
+        ] = None
+
+        st.session_state[
+            "career_selected_role"
+        ] = None
+
+        st.session_state[
+            "career_saved_profile_id"
+        ] = None
+
+        reset_search_state()
+
         st.success(
             "Le CV a été analysé."
         )
@@ -139,6 +305,7 @@ if analyze_clicked and uploaded_cv is not None:
 
         st.exception(error)
 
+
 analysis = st.session_state.get(
     "cv_analysis"
 )
@@ -149,6 +316,11 @@ if analysis is None:
     )
 
     st.stop()
+
+
+# ---------------------------------------------------------------------------
+# Étape 1 — Résultat de l'analyse
+# ---------------------------------------------------------------------------
 
 
 st.divider()
@@ -177,9 +349,13 @@ column_skills.metric(
 
 if analysis.warnings:
     for warning in analysis.warnings:
-        st.warning(warning)
+        st.warning(
+            warning
+        )
 
-st.write("#### Compétences extraites")
+st.write(
+    "#### Compétences extraites"
+)
 
 if analysis.extracted_skills:
     st.write(
@@ -187,10 +363,16 @@ if analysis.extracted_skills:
             analysis.extracted_skills
         )
     )
+
 else:
     st.write(
         "Aucune compétence normalisée détectée."
     )
+
+
+# ---------------------------------------------------------------------------
+# Étape 2 — Choix du métier
+# ---------------------------------------------------------------------------
 
 
 st.divider()
@@ -203,12 +385,14 @@ if not analysis.role_suggestions:
 
     st.stop()
 
+
 role_by_label = {
     (
         f"{suggestion.label} "
         f"— {suggestion.score:.2f}%"
     ): suggestion
-    for suggestion in analysis.role_suggestions
+    for suggestion
+    in analysis.role_suggestions
 }
 
 selected_label = st.selectbox(
@@ -216,17 +400,20 @@ selected_label = st.selectbox(
     options=list(
         role_by_label.keys()
     ),
+    key="selected_role_label",
 )
 
 selected_role = role_by_label[
     selected_label
 ]
 
-column_score, column_providers = st.columns(
-    [
-        1,
-        2,
-    ]
+column_score, column_providers = (
+    st.columns(
+        [
+            1,
+            2,
+        ]
+    )
 )
 
 column_score.metric(
@@ -268,11 +455,15 @@ with st.expander(
     st.write(
         "**Compétences cœur absentes :**",
         list(
-            selected_role
-            .missing_core_skills
+            selected_role.missing_core_skills
         )
         or "Aucune",
     )
+
+
+# ---------------------------------------------------------------------------
+# Étape 3 — Personnalisation du profil
+# ---------------------------------------------------------------------------
 
 
 generated_preview = service.build_profile(
@@ -286,13 +477,13 @@ preview_profile = (
     generated_preview.profile
 )
 
-
 st.divider()
 st.subheader("3. Personnaliser le profil")
 
 profile_name = st.text_input(
     "Nom du profil",
     value=preview_profile.name,
+    key="career_profile_name",
 )
 
 keywords_text = st.text_area(
@@ -305,6 +496,7 @@ keywords_text = st.text_area(
         "Séparez les valeurs par des virgules, "
         "des points-virgules ou des retours à la ligne."
     ),
+    key="career_keywords",
 )
 
 locations_text = st.text_input(
@@ -315,6 +507,7 @@ locations_text = st.text_input(
     help=(
         "Exemples : Paris, Lyon, Remote"
     ),
+    key="career_locations",
 )
 
 salary_min = st.number_input(
@@ -326,6 +519,7 @@ salary_min = st.number_input(
         or 0
     ),
     step=1000,
+    key="career_salary_min",
 )
 
 remote = st.checkbox(
@@ -333,7 +527,13 @@ remote = st.checkbox(
     value=bool(
         preview_profile.remote
     ),
+    key="career_remote",
 )
+
+
+# ---------------------------------------------------------------------------
+# Étape 4 — Création ou enrichissement
+# ---------------------------------------------------------------------------
 
 
 st.divider()
@@ -350,6 +550,7 @@ action = st.radio(
         "Enrichir un profil existant",
     ],
     horizontal=True,
+    key="career_save_action",
 )
 
 selected_existing_profile = None
@@ -360,6 +561,7 @@ if action == "Enrichir un profil existant":
             st.selectbox(
                 "Profil à enrichir",
                 options=existing_profiles,
+                key="career_existing_profile",
             )
         )
 
@@ -403,6 +605,7 @@ save_clicked = st.button(
         == "Enrichir un profil existant"
         and not selected_existing_profile
     ),
+    key="career_save_button",
 )
 
 if save_clicked:
@@ -410,9 +613,7 @@ if save_clicked:
         final_generated = (
             service.build_profile(
                 analysis=analysis,
-                role_id=(
-                    selected_role.role_id
-                ),
+                role_id=selected_role.role_id,
                 keywords=keywords_text,
                 locations=locations_text,
                 salary_min=int(
@@ -423,58 +624,95 @@ if save_clicked:
             )
         )
 
+        career_metadata = {
+            "role_id": selected_role.role_id,
+            "role_label": selected_role.label,
+            "role_score": selected_role.score,
+            "seniority": analysis.seniority,
+            "recommended_providers": list(
+                selected_role.preferred_providers
+            ),
+        }
+
         cv_path = st.session_state.get(
             "cv_temporary_path"
         )
 
-        if action == "Créer un nouveau profil":
-            result = service.create_profile(
-                profile=(
-                    final_generated.profile
-                ),
-                cv_source_path=cv_path,
+        if (
+            action
+            == "Créer un nouveau profil"
+        ):
+            save_result = (
+                service.create_profile(
+                    profile=(
+                        final_generated.profile
+                    ),
+                    cv_source_path=cv_path,
+                    metadata=career_metadata,
+                )
             )
+
         else:
-            result = service.enrich_profile(
-                profile_id=(
-                    selected_existing_profile
-                ),
-                profile=(
-                    final_generated.profile
-                ),
-                cv_source_path=cv_path,
+            save_result = (
+                service.enrich_profile(
+                    profile_id=(
+                        selected_existing_profile
+                    ),
+                    profile=(
+                        final_generated.profile
+                    ),
+                    cv_source_path=cv_path,
+                    metadata=career_metadata,
+                )
             )
+
+        st.session_state[
+            "career_generated_profile"
+        ] = final_generated.profile
+
+        st.session_state[
+            "career_selected_role"
+        ] = selected_role
+
+        st.session_state[
+            "career_saved_profile_id"
+        ] = save_result.profile_id
+
+        reset_search_state()
+
+        st.cache_resource.clear()
 
         st.success(
             (
                 "Profil créé"
-                if result.created
+                if save_result.created
                 else "Profil enrichi"
             )
-            + f" : {result.profile_name}"
+            + f" : {save_result.profile_name}"
         )
 
         st.write(
             "**Identifiant :**",
-            result.profile_id,
+            save_result.profile_id,
         )
 
         st.write(
             "**Configuration :**",
             str(
-                result.config_path
+                save_result.config_path
             ),
         )
 
-        if result.cv_path is not None:
+        if (
+            save_result.cv_path
+            is not None
+        ):
             st.write(
                 "**CV enregistré :**",
                 str(
-                    result.cv_path
+                    save_result.cv_path
                 ),
             )
-
-        st.cache_resource.clear()
 
     except Exception as error:
         st.error(
@@ -482,3 +720,194 @@ if save_clicked:
         )
 
         st.exception(error)
+
+
+# ---------------------------------------------------------------------------
+# Étape 5 — Recherche
+# ---------------------------------------------------------------------------
+
+
+st.divider()
+st.subheader("5. Rechercher des offres")
+
+search_profile = st.session_state.get(
+    "career_generated_profile"
+)
+
+search_role = st.session_state.get(
+    "career_selected_role"
+)
+
+saved_profile_id = st.session_state.get(
+    "career_saved_profile_id"
+)
+
+if search_profile is None:
+    st.info(
+        "Enregistrez d'abord le profil pour "
+        "pouvoir lancer la recherche."
+    )
+
+else:
+    st.success(
+        "Profil prêt pour la recherche : "
+        f"{search_profile.name}"
+    )
+
+    if saved_profile_id:
+        st.caption(
+            "Profil enregistré sous : "
+            f"{saved_profile_id}"
+        )
+
+    if search_role is not None:
+        st.write(
+            "**Métier sélectionné :**",
+            search_role.label,
+        )
+
+        st.write(
+            "**Sources recommandées :**",
+            ", ".join(
+                search_role.preferred_providers
+            ),
+        )
+
+    st.caption(
+        "RemoteOK est actuellement le seul provider "
+        "réellement opérationnel. Les autres sources "
+        "sont affichées à titre de recommandation."
+    )
+
+    search_clicked = st.button(
+        "🚀 Rechercher des offres",
+        type="primary",
+        use_container_width=True,
+        key="career_search_button",
+    )
+
+    if search_clicked:
+        try:
+            with st.spinner(
+                "Interrogation de RemoteOK et "
+                "analyse des offres..."
+            ):
+                search_result = (
+                    search_workflow.search(
+                        profile=search_profile,
+                        selected_role=search_role,
+                    )
+                )
+
+            st.session_state[
+                "career_search_result"
+            ] = search_result
+
+            st.session_state[
+                "career_search_completed"
+            ] = True
+
+            st.rerun()
+
+        except Exception as error:
+            st.session_state[
+                "career_search_result"
+            ] = None
+
+            st.session_state[
+                "career_search_completed"
+            ] = False
+
+            st.error(
+                "La recherche a échoué."
+            )
+
+            st.exception(error)
+
+
+# ---------------------------------------------------------------------------
+# Étape 6 — Résultats
+# ---------------------------------------------------------------------------
+
+
+search_result = st.session_state.get(
+    "career_search_result"
+)
+
+search_completed = st.session_state.get(
+    "career_search_completed",
+    False,
+)
+
+if search_completed:
+    st.divider()
+    st.subheader(
+        "6. Résultats de la recherche"
+    )
+
+    if search_result is None:
+        st.error(
+            "La recherche n'a produit aucun "
+            "résultat exploitable."
+        )
+
+    else:
+        display_provider_statuses(
+            search_result
+        )
+
+        if search_result.provider_errors:
+            for provider_error in (
+                search_result.provider_errors
+            ):
+                st.warning(
+                    provider_error
+                )
+
+        metric_collected, metric_relevant = (
+            st.columns(2)
+        )
+
+        metric_collected.metric(
+            "Offres analysées",
+            search_result.total_collected,
+        )
+
+        metric_relevant.metric(
+            "Offres pertinentes",
+            search_result.total_relevant,
+        )
+
+        st.write(
+            "#### Résultats"
+        )
+
+        if not search_result.jobs:
+            st.info(
+                "Aucune offre suffisamment pertinente "
+                "n'a été trouvée avec RemoteOK."
+            )
+
+            st.caption(
+                "Ce résultat est cohérent lorsque le métier "
+                "sélectionné est DSI, CIO, Directeur de projet "
+                "ou Directeur de programme. Les sources "
+                "prioritaires correspondantes seront intégrées "
+                "dans la V3.12."
+            )
+
+        else:
+            for job in (
+                search_result.jobs
+            ):
+                display_job(
+                    job
+                )
+
+        if st.button(
+            "🔄 Relancer la recherche",
+            use_container_width=True,
+            key="career_search_again_button",
+        ):
+            reset_search_state()
+            st.rerun()

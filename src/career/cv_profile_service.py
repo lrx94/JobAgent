@@ -270,11 +270,19 @@ class CVProfileService:
     def create_profile(
         self,
         profile: Profile,
-        cv_source_path: str | Path | None = None,
-        requested_profile_id: str | None = None,
+        cv_source_path: (
+            str | Path | None
+        ) = None,
+        requested_profile_id: (
+            str | None
+        ) = None,
+        metadata: (
+            dict[str, Any] | None
+        ) = None,
     ) -> ProfileSaveResult:
         """
-        Crée un nouveau profil sans écraser un profil existant.
+        Crée un nouveau profil sans écraser
+        un profil existant.
         """
 
         base_profile_id = self.slugify(
@@ -282,8 +290,10 @@ class CVProfileService:
             or profile.name
         )
 
-        profile_id = self._available_profile_id(
-            base_profile_id
+        profile_id = (
+            self._available_profile_id(
+                base_profile_id
+            )
         )
 
         return self._save_profile(
@@ -292,14 +302,20 @@ class CVProfileService:
             action="created",
             cv_source_path=cv_source_path,
             existing_config={},
+            metadata=metadata,
         )
 
     def enrich_profile(
-        self,
-        profile_id: str,
-        profile: Profile,
-        cv_source_path: str | Path | None = None,
-    ) -> ProfileSaveResult:
+            self,
+            profile_id: str,
+            profile: Profile,
+            cv_source_path: (
+                str | Path | None
+            ) = None,
+            metadata: (
+                dict[str, Any] | None
+            ) = None,
+        ) -> ProfileSaveResult:
         """
         Enrichit un profil existant.
 
@@ -377,6 +393,7 @@ class CVProfileService:
             action="updated",
             cv_source_path=cv_source_path,
             existing_config=existing_config,
+            metadata=metadata,
         )
 
     def _save_profile(
@@ -384,8 +401,13 @@ class CVProfileService:
         profile: Profile,
         profile_id: str,
         action: str,
-        cv_source_path: str | Path | None,
+        cv_source_path: (
+            str | Path | None
+        ),
         existing_config: dict[str, Any],
+        metadata: (
+            dict[str, Any] | None
+        ),
     ) -> ProfileSaveResult:
         profile_directory = (
             self.profiles_directory
@@ -433,7 +455,17 @@ class CVProfileService:
                 ),
             }
         )
-
+        if metadata:
+            config["career"] = {
+                **dict(
+                    config.get(
+                        "career",
+                        {},
+                    )
+                    or {}
+                ),
+                **dict(metadata),
+            }
         if cv_path is not None:
             config["cv"] = cv_path.name
         elif current_cv_name:
