@@ -348,7 +348,18 @@ class CVService:
         self,
         cv_id: str,
     ) -> CVDocument:
-        return self.repository.delete(cv_id)
+        """
+        Suppression directe réservée aux usages sans
+        repository d'associations.
+
+        Dans l'application multi-profils, utiliser
+        ProfileCVService.delete_cv() afin de contrôler
+        les CV encore utilisés.
+        """
+
+        return self.repository.delete(
+            cv_id
+        )
 
     def read_cv(
         self,

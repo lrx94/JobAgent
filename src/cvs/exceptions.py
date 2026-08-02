@@ -46,3 +46,23 @@ class CVAnalysisError(CVError):
     """
     L’analyse du contenu du CV a échoué.
     """
+class ProfileCVAssociationError(CVError):
+    """
+    Une association entre un profil et un CV est invalide.
+    """
+
+
+class ProfileCVAssociationNotFoundError(
+    ProfileCVAssociationError
+):
+    """
+    L'association demandée n'existe pas.
+    """
+
+
+class ProfileNotFoundError(
+    ProfileCVAssociationError
+):
+    """
+    Le profil demandé n'existe pas dans l'espace utilisateur.
+    """

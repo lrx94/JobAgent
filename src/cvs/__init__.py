@@ -7,9 +7,21 @@ from src.cvs.exceptions import (
     CVTooLargeError,
     DuplicateCVError,
     InvalidCVError,
+    ProfileCVAssociationError,
+    ProfileCVAssociationNotFoundError,
+    ProfileNotFoundError,
 )
 from src.cvs.models import (
     CVDocument,
+)
+from src.cvs.profile_cv_models import (
+    ProfileCVAssociation,
+)
+from src.cvs.profile_cv_repository import (
+    ProfileCVRepository,
+)
+from src.cvs.profile_cv_service import (
+    ProfileCVService,
 )
 from src.cvs.repository import (
     CVRepository,
@@ -37,4 +49,10 @@ __all__ = [
     "CVTooLargeError",
     "DuplicateCVError",
     "InvalidCVError",
+    "ProfileCVAssociation",
+    "ProfileCVAssociationError",
+    "ProfileCVAssociationNotFoundError",
+    "ProfileCVRepository",
+    "ProfileCVService",
+    "ProfileNotFoundError",
 ]
