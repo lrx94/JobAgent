@@ -35,3 +35,14 @@ class CVStillInUseError(CVError):
     """
     Le CV ne peut pas être supprimé car il est encore utilisé.
     """
+
+class CVTooLargeError(InvalidCVError):
+    """
+    Le fichier CV dépasse la taille maximale autorisée.
+    """
+
+
+class CVAnalysisError(CVError):
+    """
+    L’analyse du contenu du CV a échoué.
+    """
