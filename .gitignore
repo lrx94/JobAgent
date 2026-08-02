@@ -83,3 +83,7 @@ config/allowed_users.json
 profiles/*/
 profiles/dsi_cio/
 profiles/dsi_cio_2/
+
+.streamlit/secrets.toml
+.streamlit/*
+!.streamlit/secrets.example.toml

@@ -38,3 +38,20 @@ class AuthorizationConfigurationError(
     """
     La configuration d'autorisation est invalide.
     """
+
+
+class AuthenticationConfigurationError(
+    AuthenticationError
+):
+    """
+    La configuration OIDC est absente ou invalide.
+    """
+
+
+class IdentityClaimsError(
+    AuthenticationError
+):
+    """
+    Les claims OIDC reçus ne permettent pas
+    d'identifier correctement l'utilisateur.
+    """

@@ -6,6 +6,9 @@ from src.profile_manager import ProfileManager
 from src.services.job_service import JobService
 from src.ui.dashboard import display_dashboard
 from src.ui.job_card import display_job
+from src.auth.adapters.streamlit_bootstrap import (
+    require_streamlit_user,
+)
 
 
 # --------------------------------------------------
@@ -17,6 +20,7 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide",
 )
+user_context = require_streamlit_user()
 
 st.title("🚀 JobAgent")
 st.caption(

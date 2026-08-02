@@ -9,6 +9,9 @@ from src.career import CVProfileService
 from src.career.search_workflow import (
     CareerSearchWorkflow,
 )
+from src.auth.adapters.streamlit_bootstrap import (
+    require_streamlit_user,
+)
 
 
 st.set_page_config(
@@ -16,7 +19,7 @@ st.set_page_config(
     page_icon="📄",
     layout="wide",
 )
-
+user_context = require_streamlit_user()
 st.title("📄 CV et profils")
 st.caption(
     "Analysez un CV, choisissez un métier cible, "
