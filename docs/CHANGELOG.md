@@ -96,3 +96,17 @@
 - Secrets sécurisés dans Streamlit Cloud.
 - Authentification Google validée sur l'URL publique.
 - Accès limité aux comptes présents dans la liste blanche.
+
+## [3.12.3.1] - 2026-08-02
+
+### Added
+
+- Construction centralisée des chemins de stockage utilisateur.
+- Espaces privés sous `data/users/<user_id>`.
+- Répertoires dédiés aux profils, CV, offres, exports et caches.
+- Validation stricte des identifiants de stockage.
+- Protection contre les traversées de chemin.
+- Validation des noms de fichiers et extensions.
+- Création idempotente de l'arborescence utilisateur.
+- Vérification explicite de propriété d'un chemin.
+- Tests d'isolation entre plusieurs utilisateurs.

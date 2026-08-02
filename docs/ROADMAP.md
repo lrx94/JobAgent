@@ -197,3 +197,26 @@ Analyse métier
 - [x] Connexion autorisée
 - [x] Déconnexion
 - [ ] Test avec un compte non autorisé
+
+## V3.12.3.1 — Chemins utilisateurs sécurisés ✅
+
+- [x] UserStoragePaths
+- [x] Répertoire privé par user_id
+- [x] Profils isolés par chemin
+- [x] Bibliothèque CV préparée
+- [x] Répertoire d'exports
+- [x] Répertoire de cache
+- [x] Base d'offres utilisateur préparée
+- [x] Validation des identifiants
+- [x] Protection contre les path traversals
+- [x] Tests d'isolation
+
+## V3.12.3.2 — Profils isolés
+
+- [ ] Transmettre UserContext à CVProfileService
+- [ ] Utiliser UserStoragePaths
+- [ ] Lister uniquement les profils de l'utilisateur
+- [ ] Créer les profils sous data/users/<user_id>
+- [ ] Empêcher les lectures croisées
+- [ ] Adapter la page CV et profils
+- [ ] Tests avec deux utilisateurs

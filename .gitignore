@@ -87,3 +87,6 @@ profiles/dsi_cio_2/
 .streamlit/secrets.toml
 .streamlit/*
 !.streamlit/secrets.example.toml
+
+# Données privées multi-utilisateurs
+data/users/
