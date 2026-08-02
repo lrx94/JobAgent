@@ -21,18 +21,12 @@ from src.career.provider_advisor import (
 from src.career.role_detector import (
     RoleDetector,
 )
-from src.career.search_workflow import (
-    CareerSearchResult,
-    CareerSearchWorkflow,
-)
 
 
 __all__ = [
     "CVProfileService",
     "CareerAnalysis",
     "CareerProfileBuilder",
-    "CareerSearchResult",
-    "CareerSearchWorkflow",
     "GeneratedProfile",
     "JOB_ROLE_CATALOG",
     "JobRoleDefinition",
@@ -41,4 +35,5 @@ __all__ = [
     "ProviderStatus",
     "RoleDetector",
     "RoleSuggestion",
+
 ]

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from src.career import (
+from src.career import RoleDetector
+from src.career.search_workflow import (
     CareerSearchWorkflow,
-    RoleDetector,
 )
 from src.domain import Job
 from src.profile import Profile

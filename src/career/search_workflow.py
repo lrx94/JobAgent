@@ -18,14 +18,19 @@ from src.career.provider_advisor import (
 from src.domain import Job
 from src.profile import Profile
 from src.services.job_service import JobService
-
+from src.providers.provider_selector import (
+    ProviderSelectionResult,
+    ProviderSelector,
+)
 
 @dataclass(slots=True)
 class CareerSearchResult:
     """
     Résultat de recherche depuis un profil métier.
     """
-
+    provider_selection: (
+        ProviderSelectionResult | None
+    ) = None
     jobs: list[Job] = field(
         default_factory=list
     )
@@ -73,6 +78,7 @@ class CareerSearchWorkflow:
             ProviderAdvisor | None
         ) = None,
         minimum_skill_matches: int = 2,
+        provider_selector: ProviderSelector | None = None,
     ) -> None:
         self.job_service = (
             job_service
@@ -89,6 +95,10 @@ class CareerSearchWorkflow:
             int(
                 minimum_skill_matches
             ),
+        )
+        self.provider_selector = (
+            provider_selector
+            or ProviderSelector()
         )
 
     def search(
@@ -116,7 +126,17 @@ class CareerSearchWorkflow:
             for provider
             in self.job_service.providers
         ]
-
+        provider_selection = (
+            self.provider_selector.select(
+                selected_role=selected_role,
+                available_provider_names=(
+                    available_provider_names
+                ),
+                remote_requested=bool(
+                    profile.remote
+                ),
+            )
+        )
         recommended_providers = (
             list(
                 selected_role
@@ -164,6 +184,7 @@ class CareerSearchWorkflow:
                 self.job_service
                 .provider_errors
             ),
+            provider_selection=provider_selection,
         )
 
     def filter_jobs(

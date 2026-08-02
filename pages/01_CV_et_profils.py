@@ -5,9 +5,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.career import (
+from src.career import CVProfileService
+from src.career.search_workflow import (
     CareerSearchWorkflow,
-    CVProfileService,
 )
 
 
@@ -856,13 +856,66 @@ if search_completed:
             search_result
         )
 
+
+
+        # ------------------------------------------------------------------
+        # AJOUT V3.12
+        # ------------------------------------------------------------------
+
+        provider_selection = getattr(
+            search_result,
+            "provider_selection",
+            None,
+        )
+
+        if provider_selection is not None:
+            st.write(
+                "#### Sélection intelligente"
+            )
+
+            for selection_item in (
+                provider_selection.items
+            ):
+                if selection_item.selected:
+                    if selection_item.fallback:
+                        icon = "🔁"
+                        decision = "sélectionné en repli"
+                    else:
+                        icon = "🎯"
+                        decision = "sélectionné"
+
+                elif selection_item.recommended:
+                    icon = "💡"
+                    decision = "recommandé mais indisponible"
+
+                else:
+                    icon = "○"
+                    decision = "non sélectionné"
+
+                st.write(
+                    f"{icon} **{selection_item.label}** "
+                    f"— {decision} "
+                    f"(indice {selection_item.score})"
+                )
+
+                if selection_item.reasons:
+                    with st.expander(
+                        f"Pourquoi {selection_item.label} ?",
+                        expanded=False,
+                    ):
+                        for reason in selection_item.reasons:
+                            st.write(f"- {reason}")
+
+        # ------------------------------------------------------------------
+        # FIN AJOUT V3.12
+        # ------------------------------------------------------------------
+
         if search_result.provider_errors:
             for provider_error in (
                 search_result.provider_errors
             ):
-                st.warning(
-                    provider_error
-                )
+                st.warning(provider_error)
+
 
         metric_collected, metric_relevant = (
             st.columns(2)
