@@ -243,3 +243,24 @@ Analyse métier
 - [ ] Enrichissement du titre
 - [ ] Résultat d'import explicable
 - [ ] Intégration avec CVParser
+
+## V3.12.3.3-D — Interface multi-CV ✅
+
+- [x] Page Mes CV
+- [x] Import vers la bibliothèque
+- [x] Liste des CV
+- [x] Analyse et compétences
+- [x] Associations avec les profils
+- [x] Sélection du CV principal
+- [x] Renommage
+- [x] Suppression contrôlée
+- [x] Téléchargement sécurisé
+
+## V3.12.3.4 — Migration des données historiques
+
+- [ ] Importer les CV présents dans profiles/
+- [ ] Détecter les doublons par checksum
+- [ ] Créer les associations profil/CV
+- [ ] Définir les CV principaux
+- [ ] Générer un rapport de migration
+- [ ] Rendre la migration réexécutable

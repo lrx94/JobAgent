@@ -125,3 +125,18 @@
 - Renommage, lecture, liste et suppression des CV.
 - Vérification du propriétaire dans les métadonnées.
 - Tests d'isolation entre plusieurs utilisateurs.
+
+## [3.12.3.3-D] - 2026-08-02
+
+### Added
+
+- Nouvelle page Streamlit « Mes CV ».
+- Import de plusieurs CV dans une bibliothèque privée.
+- Analyse à la demande des CV.
+- Affichage des compétences détectées.
+- Téléchargement d'un CV appartenant à l'utilisateur.
+- Renommage des CV.
+- Association d'un CV à plusieurs profils.
+- Sélection du CV principal d'un profil.
+- Détachement d'un CV.
+- Suppression protégée des CV encore associés.
