@@ -24,7 +24,16 @@ from src.cvs.service import (
 from src.workspace.exceptions import (
     WorkspaceError,
 )
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import BinaryIO
 
+from src.career.models import (
+    CareerAnalysis,
+    GeneratedProfile,
+    RoleSuggestion,
+)
 
 class WorkspaceOnboardingError(
     WorkspaceError
@@ -33,7 +42,28 @@ class WorkspaceOnboardingError(
     Le parcours de création profil/CV n'a pas pu
     être terminé.
     """
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class WorkspaceOnboardingPreview:
+    """
+    Prévisualisation d'un profil construit à partir
+    de l'analyse existante du CV.
 
+    Cette opération ne crée ni profil, ni CV, ni
+    association persistée.
+    """
+
+    suggested_profile_name: str
+    suggested_cv_title: str
+    suggested_keywords: tuple[str, ...]
+    detected_role: str | None
+    detected_role_score: float | None
+    detected_skills: tuple[str, ...]
+    analysis: CareerAnalysis
+    selected_role: RoleSuggestion | None
+    warnings: tuple[str, ...] = ()
 
 @dataclass(
     frozen=True,
@@ -125,7 +155,183 @@ class WorkspaceOnboardingService:
         self.association_service = (
             association_service
         )
+    def preview_from_bytes(
+        self,
+        *,
+        content: bytes,
+        original_filename: str,
+    ) -> WorkspaceOnboardingPreview:
+        """
+        Analyse un PDF sans l'importer et propose les
+        valeurs initiales du formulaire d'onboarding.
 
+        Toute l'analyse est déléguée au service de profils
+        existant afin de conserver :
+
+        - le parser PDF ;
+        - les dictionnaires de compétences ;
+        - les synonymes ;
+        - le détecteur de métier ;
+        - le constructeur de profil.
+        """
+
+        if not isinstance(content, bytes):
+            raise TypeError(
+                "content doit être de type bytes."
+            )
+
+        if not content:
+            raise WorkspaceOnboardingError(
+                "Le CV à analyser est vide."
+            )
+
+        normalized_filename = str(
+            original_filename or "cv.pdf"
+        ).strip()
+
+        suffix = (
+            Path(normalized_filename).suffix.casefold()
+            or ".pdf"
+        )
+
+        if suffix != ".pdf":
+            raise WorkspaceOnboardingError(
+                "Le document à analyser doit être un PDF."
+            )
+
+        temporary_path: Path | None = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                suffix=".pdf",
+                delete=False,
+            ) as temporary_file:
+                temporary_file.write(content)
+                temporary_file.flush()
+
+                temporary_path = Path(
+                    temporary_file.name
+                )
+
+            analysis = (
+                self.profile_service
+                .analyze_pdf(
+                    temporary_path
+                )
+            )
+
+            generated = (
+                self.profile_service
+                .build_profile(
+                    analysis=analysis,
+                )
+            )
+
+        except Exception as error:
+            raise WorkspaceOnboardingError(
+                "Impossible d'analyser le CV pour "
+                "préremplir le profil."
+            ) from error
+
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(
+                        missing_ok=True
+                    )
+                except OSError:
+                    pass
+
+        return self._build_preview(
+            generated=generated,
+            original_filename=(
+                normalized_filename
+            ),
+        )
+
+    @staticmethod
+    def _build_preview(
+        *,
+        generated: GeneratedProfile,
+        original_filename: str,
+    ) -> WorkspaceOnboardingPreview:
+        profile = generated.profile
+
+        suggested_profile_name = str(
+            getattr(
+                profile,
+                "name",
+                "",
+            )
+            or generated.analysis.suggested_title
+            or Path(original_filename).stem
+            or "Profil CV"
+        ).strip()
+
+        if not suggested_profile_name:
+            suggested_profile_name = "Profil CV"
+
+        suggested_keywords = tuple(
+            dict.fromkeys(
+                str(value).strip()
+                for value in (
+                    getattr(
+                        profile,
+                        "keywords",
+                        [],
+                    )
+                    or []
+                )
+                if str(value).strip()
+            )
+        )
+
+        selected_role = (
+            generated.selected_role
+        )
+
+        detected_role = (
+            selected_role.label
+            if selected_role is not None
+            else None
+        )
+
+        detected_role_score = (
+            float(selected_role.score)
+            if selected_role is not None
+            else None
+        )
+
+        suggested_cv_title = (
+            f"CV {suggested_profile_name}"
+        )
+
+        return WorkspaceOnboardingPreview(
+            suggested_profile_name=(
+                suggested_profile_name
+            ),
+            suggested_cv_title=(
+                suggested_cv_title
+            ),
+            suggested_keywords=(
+                suggested_keywords
+            ),
+            detected_role=detected_role,
+            detected_role_score=(
+                detected_role_score
+            ),
+            detected_skills=tuple(
+                generated
+                .analysis
+                .extracted_skills
+            ),
+            analysis=generated.analysis,
+            selected_role=selected_role,
+            warnings=tuple(
+                generated.analysis.warnings
+            ),
+        )
     @property
     def user_id(self) -> str:
         return self.cv_service.user_id
