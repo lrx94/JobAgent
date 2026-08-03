@@ -90,6 +90,8 @@ class MarketReport:
     jobs_without_detected_skills: int
 
     profile_skills: tuple[str, ...] = ()
+    profile_skill_source: str = "unknown"
+    
     skill_stats: tuple[
         MarketSkillStat,
         ...
