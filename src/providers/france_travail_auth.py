@@ -89,15 +89,9 @@ class FranceTravailAuthClient:
             method="POST",
         )
 
-        print(
-            "OAuth URL :",
-            self.config.token_url,
-        )
+       
 
-        print(
-            "OAuth scope :",
-            self.config.scope,
-        )
+        
         response_data = self._execute(
             request
         )
