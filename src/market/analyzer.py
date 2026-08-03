@@ -59,6 +59,10 @@ class MarketAnalyzer:
         *,
         profile: Profile,
         jobs: Iterable[Job],
+        profile_skills: (
+            Iterable[str] | None
+        ) = None,
+        profile_skill_source: str = "keywords",
     ) -> MarketReport:
         """
         Analyse les offres fournies et compare les
@@ -82,15 +86,36 @@ class MarketAnalyzer:
             jobs
         )
 
-        profile_skills = tuple(
-            self._extract_profile_skills(
-                profile
+        if profile_skills is None:
+            normalized_profile_skills = tuple(
+                self._extract_profile_skills(
+                    profile
+                )
             )
-        )
+
+            normalized_profile_skill_source = (
+                "keywords"
+            )
+
+        else:
+            normalized_profile_skills = tuple(
+                self._normalize_profile_skills(
+                    profile_skills
+                )
+            )
+
+            normalized_profile_skill_source = (
+                str(
+                    profile_skill_source
+                    or "unknown"
+                ).strip()
+                or "unknown"
+            )
 
         profile_skill_keys = {
             value.casefold()
-            for value in profile_skills
+            for value
+            in normalized_profile_skills
         }
 
         skill_job_counts: Counter[str] = (
@@ -239,7 +264,12 @@ class MarketAnalyzer:
                 total_jobs
                 - jobs_with_skills
             ),
-            profile_skills=profile_skills,
+            profile_skills=(
+                normalized_profile_skills
+            ),
+            profile_skill_source=(
+                normalized_profile_skill_source
+            ),
             skill_stats=skill_stats,
             missing_skill_stats=(
                 missing_stats
@@ -277,6 +307,53 @@ class MarketAnalyzer:
             self.skill_extractor.extract(
                 text
             )
+        )
+
+    def _normalize_profile_skills(
+        self,
+        values: Iterable[str],
+    ) -> list[str]:
+        """
+        Normalise les compétences provenant du CV avec
+        le même SkillExtractor que celui utilisé pour
+        les offres.
+
+        Les valeurs originales sont conservées en repli
+        afin de rester compatible avec les analyses CV
+        déjà normalisées.
+        """
+
+        supplied = self._normalize_skills(
+            values
+        )
+
+        if not supplied:
+            return []
+
+        extracted = self._normalize_skills(
+            self.skill_extractor.extract(
+                " ".join(supplied)
+            )
+        )
+
+        merged: list[str] = []
+        seen: set[str] = set()
+
+        for skill in (
+            extracted
+            + supplied
+        ):
+            identity = skill.casefold()
+
+            if identity in seen:
+                continue
+
+            seen.add(identity)
+            merged.append(skill)
+
+        return sorted(
+            merged,
+            key=str.casefold,
         )
 
     def _extract_job_skills(

@@ -47,6 +47,68 @@ class TestMarketAnalyzer(
     unittest.TestCase
 ):
 
+    def test_explicit_cv_skills_override_profile_keywords(
+        self,
+    ):
+        report = self.analyzer.analyze(
+            profile=self.profile,
+            jobs=self.create_jobs(),
+            profile_skills=(
+                "Terraform",
+                "Docker",
+            ),
+            profile_skill_source="cv",
+        )
+
+        stats = {
+            item.skill: item
+            for item in report.skill_stats
+        }
+
+        self.assertTrue(
+            stats["Terraform"]
+            .present_in_profile
+        )
+
+        self.assertTrue(
+            stats["Docker"]
+            .present_in_profile
+        )
+
+        self.assertFalse(
+            stats["Python"]
+            .present_in_profile
+        )
+
+        self.assertEqual(
+            report.profile_skill_source,
+            "cv",
+        )
+
+    def test_default_behavior_keeps_keywords_fallback(
+        self,
+    ):
+        report = self.analyzer.analyze(
+            profile=self.profile,
+            jobs=self.create_jobs(),
+        )
+
+        stats = {
+            item.skill: item
+            for item in report.skill_stats
+        }
+
+        self.assertTrue(
+            stats["Python"]
+            .present_in_profile
+        )
+
+        self.assertEqual(
+            report.profile_skill_source,
+            "keywords",
+        )
+
+
     def setUp(self) -> None:
         self.profile = Profile(
             name="Data Engineer",

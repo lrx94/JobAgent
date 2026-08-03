@@ -36,6 +36,7 @@ from src.workspace.ui.actions import (
 import hashlib
 from src.market import (
     MarketAnalyzer,
+    MarketProfileSkillResolver,
 )
 
 STORAGE_ROOT = (
@@ -86,6 +87,12 @@ search_service = WorkspaceSearchService(
     )
 )
 market_analyzer = MarketAnalyzer()
+
+market_profile_skill_resolver = (
+    MarketProfileSkillResolver(
+        cv_service=workspace.cv_service
+    )
+)
 
 cv_actions = WorkspaceCVActions(
     cv_service=workspace.cv_service,
@@ -1457,7 +1464,7 @@ def render_provider_information(
 
 def render_market_report(
     *,
-    profile_id: str,
+    profile: WorkspaceProfileItem,
     search_result,
 ) -> None:
     st.write("### 📊 Portrait du marché")
@@ -1466,7 +1473,7 @@ def render_market_report(
         context = (
             search_service
             .build_context(
-                profile_id
+                profile.profile_id
             )
         )
 
@@ -1484,9 +1491,33 @@ def render_market_report(
             or []
         )
 
+        primary_cv_id = (
+            profile.primary_cv.cv_id
+            if profile.primary_cv
+            else None
+        )
+
+        resolved_profile_skills = (
+            market_profile_skill_resolver
+            .resolve(
+                primary_cv_id=primary_cv_id,
+                fallback_keywords=(
+                    context.profile.keywords
+                ),
+            )
+        )
+
         report = market_analyzer.analyze(
             profile=context.profile,
             jobs=source_jobs,
+            profile_skills=(
+                resolved_profile_skills
+                .skills
+            ),
+            profile_skill_source=(
+                resolved_profile_skills
+                .source
+            ),
         )
 
     except Exception as error:
@@ -1500,6 +1531,16 @@ def render_market_report(
         "Analyse de l'échantillon actuellement "
         "collecté par les providers JobAgent."
     )
+    
+    st.caption(
+        "Comparaison du candidat : "
+        f"**{resolved_profile_skills.source_label}**"
+    )
+
+    for warning in (
+        resolved_profile_skills.warnings
+    ):
+        st.warning(warning)
 
     metric_jobs, metric_coverage, metric_skills = (
         st.columns(3)
@@ -1788,7 +1829,7 @@ def render_search_panel(
             expanded=False,
     ):
         render_market_report(
-            profile_id=profile_id,
+            profile=profile,
             search_result=search_result,
         )
 
