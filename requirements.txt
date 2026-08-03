@@ -1,0 +1,33 @@
+# ============================================================
+# JobAgent V3.12.1
+# ============================================================
+
+# Interface Web
+streamlit[auth]>=1.45,<2.0
+
+# IA
+openai>=2.0,<3.0
+
+# PDF
+PyMuPDF>=1.24
+
+# HTTP
+requests>=2.32
+
+# Validation / modèles
+pydantic>=2.10
+
+# Variables d'environnement
+python-dotenv>=1.0
+
+# Dates
+python-dateutil>=2.9
+
+# Base de données
+SQLAlchemy>=2.0
+
+# Data (préparation futures versions)
+pandas>=2.2
+
+# Tests
+pytest>=8.0

@@ -1,0 +1,169 @@
+# Changelog
+
+## v1.1.0-beta
+
+### Added
+
+- Matching Engine
+- Multi profils
+- Dashboard Streamlit
+- SQLite
+- GitHub
+
+### In Progress
+
+- Repository V2
+- Historique
+- Favoris
+## Sprint B3.2
+
+### Architecture
+- Migration complète de `src.models` vers `src.domain`
+- Suppression du conflit `models.py` / `models/`
+
+### Storage
+- Repository V2
+- CRUD complet
+- Retour des objets `Job` au lieu des `sqlite3.Row`
+
+### Qualité
+- Architecture plus modulaire
+- Préparation des fonctionnalités Favoris / Historique / Candidatures
+
+## [3.9.0] - 2026-07-31
+
+### Added
+
+- Détection des nouvelles offres.
+- Détection des offres modifiées.
+- Détection des offres inchangées.
+- Métadonnées first_seen_at, last_seen_at et updated_at.
+- Compteur seen_count.
+- Empreinte SHA-256 du contenu des offres.
+- Requêtes pour les offres nouvelles, récentes et les meilleurs scores.
+- Statistiques globales et statistiques par source.
+- Résultats détaillés de sauvegarde dans JobService.
+
+### Changed
+
+- JobRepository.save retourne désormais RepositorySaveResult.
+- Migration SQLite automatique vers le schéma V3.9.
+- Suppression de la double sauvegarde éventuelle dans app.py.
+
+## [3.10.0] - 2026-08-01
+
+### Added
+- Premier provider réel RemoteOK.
+- Architecture multi-providers.
+- ProviderRegistry.
+- JobAggregator.
+- Workflow complet CV → RemoteOK.
+- Extraction des compétences depuis un CV.
+- Normalisation des compétences.
+- Matching sémantique.
+- Persistance des offres.
+
+### Changed
+- Les providers ne filtrent plus les compétences.
+- Le matching devient responsable de la pertinence.
+- Les offres sans compétence commune obtiennent désormais un score nul.
+
+### Fixed
+- Réduction des faux positifs.
+- Normalisation des tags RemoteOK.
+- Stabilisation de JobService.
+
+## [3.12.2.2] - 2026-08-02
+
+### Added
+
+- Contrat générique `AuthorizationRepository`.
+- Repository JSON de liste blanche.
+- Normalisation et validation des adresses e-mail.
+- Mise en cache et rechargement de la liste blanche.
+- Service d'autorisation indépendant du stockage.
+- Contrôleur d'accès produisant un `UserContext`.
+- Contrôle des rôles applicatifs.
+- Refus par défaut des comptes absents de la liste blanche.
+
+## [3.12.2.4] - 2026-08-02
+
+### Added
+
+- Déploiement privé de JobAgent sur Streamlit Community Cloud.
+- Configuration Google OIDC de production.
+- URI OAuth de production.
+- Secrets sécurisés dans Streamlit Cloud.
+- Authentification Google validée sur l'URL publique.
+- Accès limité aux comptes présents dans la liste blanche.
+
+## [3.12.3.1] - 2026-08-02
+
+### Added
+
+- Construction centralisée des chemins de stockage utilisateur.
+- Espaces privés sous `data/users/<user_id>`.
+- Répertoires dédiés aux profils, CV, offres, exports et caches.
+- Validation stricte des identifiants de stockage.
+- Protection contre les traversées de chemin.
+- Validation des noms de fichiers et extensions.
+- Création idempotente de l'arborescence utilisateur.
+- Vérification explicite de propriété d'un chemin.
+- Tests d'isolation entre plusieurs utilisateurs.
+
+## [3.12.3.3-A] - 2026-08-02
+
+### Added
+
+- Modèle canonique CVDocument.
+- Bibliothèque de CV indépendante des profils.
+- Repository CV isolé par utilisateur.
+- Import de PDF depuis bytes, flux ou fichier.
+- Métadonnées JSON par CV.
+- Checksum SHA-256 des documents.
+- Détection des CV identiques.
+- Renommage, lecture, liste et suppression des CV.
+- Vérification du propriétaire dans les métadonnées.
+- Tests d'isolation entre plusieurs utilisateurs.
+
+## [3.12.3.3-D] - 2026-08-02
+
+### Added
+
+- Nouvelle page Streamlit « Mes CV ».
+- Import de plusieurs CV dans une bibliothèque privée.
+- Analyse à la demande des CV.
+- Affichage des compétences détectées.
+- Téléchargement d'un CV appartenant à l'utilisateur.
+- Renommage des CV.
+- Association d'un CV à plusieurs profils.
+- Sélection du CV principal d'un profil.
+- Détachement d'un CV.
+- Suppression protégée des CV encore associés.
+
+
+---
+
+# 21. Changelog
+
+Dans `docs/CHANGELOG.md` :
+
+```markdown
+## [3.13.1] - 2026-08-02
+
+### Added
+
+- Fondation du Career Workspace.
+- Point d'entrée unique `build_workspace()`.
+- Modèle `Workspace`.
+- Agrégat cohérent `WorkspaceServices`.
+- État de navigation indépendant de Streamlit.
+- Vérification de cohérence des utilisateurs et repositories.
+- Partage d'une instance unique de `CVRepository`.
+- Documentation de l'architecture Workspace.
+
+### Changed
+
+- Les pages CV/profils et Mes CV utilisent le même Workspace.
+- Suppression de la construction dupliquée des services utilisateur.
+- Unification de la source de vérité sous `data/users/<user_id>`.

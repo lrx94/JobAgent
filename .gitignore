@@ -1,28 +1,92 @@
-# Environnement virtuel
+# ==========================
+# Virtual environments
+# ==========================
 .venv/
+venv/
 
+# ==========================
 # Python
+# ==========================
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.egg-info/
+
+# ==========================
+# macOS
+# ==========================
+.DS_Store
+
+# ==========================
+# Streamlit
+# ==========================
+.streamlit/secrets.toml
+
+# ==========================
+# Environment variables
+# ==========================
+.env
+
+# ==========================
+# SQLite
+# ==========================
+*.db
+
+# ==========================
+# VS Code / IDE
+# ==========================
+.vscode/
+.idea/
+
+# ==========================
+# Pytest
+# ==========================
+.pytest_cache/
+
+# ==========================
+# Ruff
+# ==========================
+.ruff_cache/
+
+# ==========================
+# Logs
+# ==========================
+*.log
+
+# ==========================
+# Generated reports
+# ==========================
+data/reports/
 
 # macOS
 .DS_Store
 
-# Streamlit
-.streamlit/
+# Python
+__pycache__/
+*.pyc
 
-# Variables d'environnement
-.env
+# Virtual env
+.venv/
 
-# Base SQLite
-*.db
-
-# VS Code
+# IDE
 .vscode/
+.idea/
 
-# Rapports temporaires
-data/reports/
+# Tests
+.pytest_cache/
+.mypy_cache/
 
-# Logs
-*.log
+# Streamlit
+.streamlit/secrets.toml
+
+config/allowed_users.json
+profiles/*/
+profiles/dsi_cio/
+profiles/dsi_cio_2/
+
+.streamlit/secrets.toml
+.streamlit/*
+!.streamlit/secrets.example.toml
+
+# Données privées multi-utilisateurs
+data/users/

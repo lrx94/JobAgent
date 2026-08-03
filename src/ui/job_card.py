@@ -1,20 +1,13 @@
 import streamlit as st
 
-
-def score_color(score):
-
-    if score >= 80:
-        return "🟢"
-
-    if score >= 60:
-        return "🟠"
-
-    return "🔴"
+from src.ui.score_utils import (
+    score_badge,
+    score_summary,
+    score_progress,
+)
 
 
 def display_job(job):
-
-    color = score_color(job.score)
 
     with st.container(border=True):
 
@@ -23,42 +16,90 @@ def display_job(job):
         with col1:
 
             st.subheader(job.title)
+            st.caption(
+                f"🏢 **{job.company}** • "
+                f"📍 {job.location} • "
+                f"🌐 {job.source}"
+            )
 
-            st.write(f"🏢 {job.company}")
-
-            st.write(f"📍 {job.location}")
-
-            st.caption(job.source)
 
         with col2:
 
             st.metric(
-                "",
-                f"{color} {job.score}%"
+                label="🎯 Matching",
+                value=f"{job.score}%"
             )
 
+        # Barre de progression
+        st.progress(score_progress(job.score))
+
+        # Badge
+        st.markdown(f"### {score_badge(job.score)}")
+
+        # Résumé
+        st.info(score_summary(job))
+
+        # Détails du score
+        if job.match_details:
+
+            with st.expander("📊 Pourquoi ce score ?"):
+
+                st.write(
+                    f"🧠 Compétences : {job.match_details.get('skills', 0)} pts"
+                )
+
+                st.write(
+                    f"📍 Localisation : {job.match_details.get('location', 0)} pts"
+                )
+
+                st.write(
+                    f"🏠 Télétravail : {job.match_details.get('remote', 0)} pts"
+                )
+
+                st.write(
+                    f"💰 Salaire : {job.match_details.get('salary', 0)} pts"
+                )
+
+        st.divider()
+        # Compétences trouvées
         if job.matched_skills:
-
+            st.markdown("#### 🟢 Compétences détectées")
             st.success(
-                "✔ " + " • ".join(job.matched_skills)
+                 " • ".join(job.matched_skills)
             )
 
+        # Compétences manquantes
         if job.missing_skills:
 
+            st.markdown("#### 🔴 Compétences manquantes")
             st.warning(
-                "❌ " + " • ".join(job.missing_skills)
-            )
+                " • ".join(job.missing_skills)
+                )
 
+        # Description
         if job.description:
 
-            with st.expander("Description"):
+            with st.expander("📄 Description"):
 
-                st.write(job.description)
+                description = job.description or ""
 
+                MAX_LENGTH = 300
+
+                if len(description) > MAX_LENGTH:
+
+                    st.write(description[:MAX_LENGTH] + "...")
+
+                    st.caption("Lire la suite en ouvrant l'offre.")
+
+                else:
+
+                    st.write(description)
+
+        # Lien
         if job.url:
 
             st.link_button(
-                "Voir l'offre",
-                job.url,
-                use_container_width=True
+                "🔗 Consulter l'offre",
+                 job.url,
+                 use_container_width=True,
             )
