@@ -23,6 +23,9 @@ from src.storage.user_paths import (
 from src.workspace.exceptions import (
     WorkspaceConfigurationError,
 )
+from src.workspace.onboarding import (
+    WorkspaceOnboardingService,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +43,7 @@ class WorkspaceServices:
     cv_service: CVService
     association_repository: ProfileCVRepository
     association_service: ProfileCVService
-
+    onboarding_service: WorkspaceOnboardingService
     def __post_init__(self) -> None:
         expected_user_id = self.paths.user_id
 
@@ -59,6 +62,9 @@ class WorkspaceServices:
             ),
             "association_service": (
                 self.association_service.user_id
+            ),
+            "onboarding_service": (
+                self.onboarding_service.user_id
             ),
         }
 
@@ -166,6 +172,36 @@ class WorkspaceServices:
             raise WorkspaceConfigurationError(
                 "ProfileCVService doit utiliser "
                 "le repository d'associations partagé."
+            )
+        
+        if (
+            self.onboarding_service
+            .profile_service
+            is not self.profile_service
+        ):
+            raise WorkspaceConfigurationError(
+                "WorkspaceOnboardingService doit utiliser "
+                "le service de profils partagé."
+            )
+
+        if (
+            self.onboarding_service
+            .cv_service
+            is not self.cv_service
+        ):
+            raise WorkspaceConfigurationError(
+                "WorkspaceOnboardingService doit utiliser "
+                "le service CV partagé."
+            )
+
+        if (
+            self.onboarding_service
+            .association_service
+            is not self.association_service
+        ):
+            raise WorkspaceConfigurationError(
+                "WorkspaceOnboardingService doit utiliser "
+                "le service d'associations partagé."
             )
 
     @property

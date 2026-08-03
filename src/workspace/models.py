@@ -157,3 +157,34 @@ class Workspace:
         return self.with_state(
             self.state.change_view(view)
         )
+    
+    @property
+    def onboarding_service(self):
+        return (
+            self.services
+            .onboarding_service
+        )
+    
+    def select_onboarding_result(
+        self,
+        result,
+    ) -> Workspace:
+        """
+        Sélectionne immédiatement le profil et le CV
+        issus d'un onboarding terminé.
+        """
+
+        state = (
+            self.state
+            .select_profile(
+                result.profile_id
+            )
+            .select_cv(
+                result.cv_id
+            )
+            .change_view(
+                "overview"
+            )
+        )
+
+        return self.with_state(state)

@@ -35,7 +35,9 @@ from src.workspace.services import (
 from src.workspace.state import (
     WorkspaceState,
 )
-
+from src.workspace.onboarding import (
+    WorkspaceOnboardingService,
+)
 
 DEFAULT_STORAGE_ROOT = (
     Path("data")
@@ -131,6 +133,16 @@ def build_workspace(
             cv_repository=cv_repository,
         )
     )
+    onboarding_service = (
+        WorkspaceOnboardingService(
+            profile_service=profile_service,
+            cv_service=cv_service,
+            association_service=(
+                association_service
+            ),
+        )
+    )
+    
 
     services = WorkspaceServices(
         paths=paths,
@@ -142,6 +154,9 @@ def build_workspace(
         ),
         association_service=(
             association_service
+        ),
+                onboarding_service=(
+            onboarding_service
         ),
     )
 

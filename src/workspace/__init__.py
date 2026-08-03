@@ -18,6 +18,11 @@ from src.workspace.services import (
 from src.workspace.state import (
     WorkspaceState,
 )
+from src.workspace.onboarding import (
+    WorkspaceOnboardingError,
+    WorkspaceOnboardingResult,
+    WorkspaceOnboardingService,
+)
 
 
 __all__ = [
@@ -31,4 +36,7 @@ __all__ = [
     "WorkspaceServices",
     "WorkspaceState",
     "build_workspace",
+    "WorkspaceOnboardingError",
+    "WorkspaceOnboardingResult",
+    "WorkspaceOnboardingService",
 ]
