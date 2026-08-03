@@ -33,6 +33,9 @@ from src.workspace.ui import (
 from src.workspace.ui.actions import (
     WorkspaceCVActions,
 )
+import os
+from src.providers.france_travail_config import FranceTravailConfig
+
 
 
 STORAGE_ROOT = (
@@ -50,7 +53,18 @@ st.set_page_config(
     page_icon="🧭",
     layout="wide",
 )
+cfg = FranceTravailConfig.from_environment()
 
+st.sidebar.write("### Debug France Travail")
+st.sidebar.write("Configured :", cfg.configured)
+st.sidebar.write(
+    "Client ID :",
+    "OK" if os.getenv("FRANCE_TRAVAIL_CLIENT_ID") else "ABSENT",
+)
+st.sidebar.write(
+    "Secret :",
+    "OK" if os.getenv("FRANCE_TRAVAIL_CLIENT_SECRET") else "ABSENT",
+)
 user_context = require_streamlit_user()
 
 workspace = build_workspace(
