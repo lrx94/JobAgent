@@ -33,7 +33,7 @@ from src.workspace.ui import (
 from src.workspace.ui.actions import (
     WorkspaceCVActions,
 )
-
+import hashlib
 
 
 STORAGE_ROOT = (
@@ -45,6 +45,25 @@ SELECTED_PROFILE_KEY = (
     "career_workspace_selected_profile"
 )
 
+ONBOARDING_FILE_DIGEST_KEY = (
+    "workspace_onboarding_file_digest"
+)
+
+ONBOARDING_PREVIEW_KEY = (
+    "workspace_onboarding_preview"
+)
+
+ONBOARDING_PROFILE_NAME_KEY = (
+    "workspace_onboarding_profile_name"
+)
+
+ONBOARDING_CV_TITLE_KEY = (
+    "workspace_onboarding_cv_title"
+)
+
+ONBOARDING_KEYWORDS_KEY = (
+    "workspace_onboarding_keywords"
+)
 
 st.set_page_config(
     page_title="Career Workspace",
@@ -224,28 +243,183 @@ def render_quick_profile_creation() -> None:
         )
 
         rerun()
+
 def render_profile_from_cv_creation() -> None:
     with st.expander(
         "📄 Créer un profil depuis mon CV",
         expanded=False,
     ):
         st.caption(
-            "Le CV sera importé, analysé et associé "
-            "automatiquement au nouveau profil."
+            "Le CV est analysé avec les dictionnaires "
+            "de compétences et synonymes déjà utilisés "
+            "par JobAgent."
         )
+
+        uploaded_file = st.file_uploader(
+            "CV au format PDF",
+            type=["pdf"],
+            key="workspace_onboarding_cv",
+        )
+
+        if uploaded_file is None:
+            st.info(
+                "Ajoute un PDF pour préremplir "
+                "automatiquement le profil."
+            )
+            return
+
+        content = uploaded_file.getvalue()
+
+        file_digest = hashlib.sha256(
+            content
+        ).hexdigest()
+
+        previous_digest = (
+            st.session_state.get(
+                ONBOARDING_FILE_DIGEST_KEY
+            )
+        )
+
+        if file_digest != previous_digest:
+            try:
+                with st.spinner(
+                    "Analyse du CV et préparation "
+                    "du profil..."
+                ):
+                    preview = (
+                        workspace
+                        .onboarding_service
+                        .preview_from_bytes(
+                            content=content,
+                            original_filename=(
+                                uploaded_file.name
+                            ),
+                        )
+                    )
+
+            except Exception as error:
+                st.session_state[
+                    ONBOARDING_PREVIEW_KEY
+                ] = None
+
+                st.session_state[
+                    ONBOARDING_PROFILE_NAME_KEY
+                ] = Path(
+                    uploaded_file.name
+                ).stem
+
+                st.session_state[
+                    ONBOARDING_CV_TITLE_KEY
+                ] = Path(
+                    uploaded_file.name
+                ).stem
+
+                st.session_state[
+                    ONBOARDING_KEYWORDS_KEY
+                ] = ""
+
+                st.warning(
+                    "Le CV n'a pas pu être utilisé "
+                    "pour préremplir le formulaire : "
+                    f"{error}"
+                )
+
+            else:
+                st.session_state[
+                    ONBOARDING_PREVIEW_KEY
+                ] = preview
+
+                st.session_state[
+                    ONBOARDING_PROFILE_NAME_KEY
+                ] = (
+                    preview
+                    .suggested_profile_name
+                )
+
+                st.session_state[
+                    ONBOARDING_CV_TITLE_KEY
+                ] = (
+                    preview
+                    .suggested_cv_title
+                )
+
+                st.session_state[
+                    ONBOARDING_KEYWORDS_KEY
+                ] = ", ".join(
+                    preview.suggested_keywords
+                )
+
+            st.session_state[
+                ONBOARDING_FILE_DIGEST_KEY
+            ] = file_digest
+
+        preview = st.session_state.get(
+            ONBOARDING_PREVIEW_KEY
+        )
+
+        if preview is not None:
+            st.success(
+                "Le CV a été analysé. "
+                "Les champs ont été préremplis."
+            )
+
+            summary_columns = st.columns(2)
+
+            with summary_columns[0]:
+                st.write(
+                    "**Métier détecté**"
+                )
+
+                st.write(
+                    preview.detected_role
+                    or "Non déterminé"
+                )
+
+                if (
+                    preview.detected_role_score
+                    is not None
+                ):
+                    st.caption(
+                        "Confiance : "
+                        f"{preview.detected_role_score:.0f} %"
+                    )
+
+            with summary_columns[1]:
+                st.write(
+                    "**Compétences reconnues**"
+                )
+
+                st.write(
+                    len(
+                        preview.detected_skills
+                    )
+                )
+
+            if preview.detected_skills:
+                with st.expander(
+                    "Voir les compétences détectées",
+                    expanded=False,
+                ):
+                    st.write(
+                        ", ".join(
+                            preview.detected_skills
+                        )
+                    )
+
+            for warning in (
+                preview.warnings
+            ):
+                st.warning(warning)
 
         with st.form(
             "career_workspace_onboarding_form",
-            clear_on_submit=True,
+            clear_on_submit=False,
         ):
-            uploaded_file = st.file_uploader(
-                "CV au format PDF",
-                type=["pdf"],
-                key="workspace_onboarding_cv",
-            )
-
             profile_name = st.text_input(
                 "Nom du profil de recherche",
+                key=(
+                    ONBOARDING_PROFILE_NAME_KEY
+                ),
                 placeholder=(
                     "Ex. DSI / CIO, Data Engineer"
                 ),
@@ -253,11 +427,17 @@ def render_profile_from_cv_creation() -> None:
 
             cv_title = st.text_input(
                 "Titre du CV",
+                key=(
+                    ONBOARDING_CV_TITLE_KEY
+                ),
                 placeholder="Ex. CV DSI 2026",
             )
 
             keywords_text = st.text_area(
                 "Mots-clés initiaux",
+                key=(
+                    ONBOARDING_KEYWORDS_KEY
+                ),
                 placeholder=(
                     "Transformation SI, COBIT, "
                     "gouvernance, cloud"
@@ -267,6 +447,9 @@ def render_profile_from_cv_creation() -> None:
             locations_text = st.text_input(
                 "Localisations recherchées",
                 placeholder="Paris, Remote",
+                key=(
+                    "workspace_onboarding_locations"
+                ),
             )
 
             salary_min = st.number_input(
@@ -283,12 +466,6 @@ def render_profile_from_cv_creation() -> None:
                 key="onboarding_remote",
             )
 
-            analyze = st.checkbox(
-                "Analyser automatiquement le CV",
-                value=True,
-                key="onboarding_analyze",
-            )
-
             submitted = st.form_submit_button(
                 "Créer le profil depuis ce CV",
                 type="primary",
@@ -296,12 +473,6 @@ def render_profile_from_cv_creation() -> None:
             )
 
         if not submitted:
-            return
-
-        if uploaded_file is None:
-            st.error(
-                "Sélectionne un fichier PDF."
-            )
             return
 
         if not profile_name.strip():
@@ -327,7 +498,7 @@ def render_profile_from_cv_creation() -> None:
                 workspace
                 .onboarding_service
                 .create_from_bytes(
-                    content=uploaded_file.getvalue(),
+                    content=content,
                     original_filename=(
                         uploaded_file.name
                     ),
@@ -341,9 +512,10 @@ def render_profile_from_cv_creation() -> None:
                     duplicate_policy=(
                         CVService.DUPLICATE_REUSE
                     ),
-                    analyze=analyze,
+                    analyze=True,
                 )
             )
+
         except Exception as error:
             st.error(
                 "Impossible de créer le profil "
@@ -355,12 +527,26 @@ def render_profile_from_cv_creation() -> None:
             SELECTED_PROFILE_KEY
         ] = result.profile_id
 
+        for state_key in (
+            ONBOARDING_FILE_DIGEST_KEY,
+            ONBOARDING_PREVIEW_KEY,
+            ONBOARDING_PROFILE_NAME_KEY,
+            ONBOARDING_CV_TITLE_KEY,
+            ONBOARDING_KEYWORDS_KEY,
+        ):
+            st.session_state.pop(
+                state_key,
+                None,
+            )
+
         st.success(
-            "Le profil a été créé et le CV "
-            "a été associé comme CV principal."
+            "Le profil a été créé avec les données "
+            "issues de l'analyse du CV."
         )
 
         rerun()
+
+
 def render_navigation(
     snapshot,
     selected_profile_id: str | None,

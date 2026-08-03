@@ -4,6 +4,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.auth.models import (
     CurrentUser,
@@ -11,6 +12,11 @@ from src.auth.models import (
 )
 from src.auth.user_context import (
     UserContext,
+)
+from src.career.models import (
+    CareerAnalysis,
+    GeneratedProfile,
+    RoleSuggestion,
 )
 from src.profile import Profile
 from src.workspace.builder import (
@@ -80,7 +86,75 @@ class TestWorkspaceOnboarding(
             remote=True,
         )
 
-    def test_create_from_bytes(self):
+    @staticmethod
+    def create_generated_profile() -> GeneratedProfile:
+        role = RoleSuggestion(
+            role_id="dsi_cio",
+            label="DSI / CIO",
+            score=92.0,
+            matched_aliases=(
+                "DSI",
+                "CIO",
+            ),
+            matched_skills=(
+                "gouvernance si",
+                "transformation si",
+                "cobit",
+            ),
+            missing_core_skills=(),
+            preferred_providers=(
+                "France Travail",
+            ),
+        )
+
+        analysis = CareerAnalysis(
+            suggested_title="DSI / CIO",
+            seniority="executive",
+            extracted_skills=(
+                "gouvernance si",
+                "transformation si",
+                "cobit",
+            ),
+            role_suggestions=(
+                role,
+            ),
+            search_terms=(
+                "DSI",
+                "CIO",
+            ),
+            warnings=(),
+        )
+
+        return GeneratedProfile(
+            profile=Profile(
+                name="DSI / CIO",
+                keywords=[
+                    "DSI / CIO",
+                    "DSI",
+                    "CIO",
+                    "gouvernance si",
+                    "transformation si",
+                    "cobit",
+                ],
+                locations=[],
+                salary_min=0,
+                remote=True,
+            ),
+            analysis=analysis,
+            selected_role=role,
+            added_keywords=[
+                "DSI / CIO",
+                "DSI",
+                "CIO",
+                "gouvernance si",
+                "transformation si",
+                "cobit",
+            ],
+        )
+
+    def test_create_from_bytes(
+        self,
+    ):
         result = (
             self.workspace
             .onboarding_service
@@ -126,7 +200,9 @@ class TestWorkspaceOnboarding(
             .list_profiles(),
         )
 
-    def test_cv_is_associated_to_profile(self):
+    def test_cv_is_associated_to_profile(
+        self,
+    ):
         result = (
             self.workspace
             .onboarding_service
@@ -160,7 +236,9 @@ class TestWorkspaceOnboarding(
             associations[0].is_primary
         )
 
-    def test_stream_import(self):
+    def test_stream_import(
+        self,
+    ):
         result = (
             self.workspace
             .onboarding_service
@@ -179,7 +257,9 @@ class TestWorkspaceOnboarding(
             "cv.pdf",
         )
 
-    def test_duplicate_reuses_document(self):
+    def test_duplicate_reuses_document(
+        self,
+    ):
         first = (
             self.workspace
             .onboarding_service
@@ -280,7 +360,9 @@ class TestWorkspaceOnboarding(
                 )
             )
 
-    def test_empty_stream_is_rejected(self):
+    def test_empty_stream_is_rejected(
+        self,
+    ):
         with self.assertRaises(Exception):
             (
                 self.workspace
@@ -293,7 +375,9 @@ class TestWorkspaceOnboarding(
                 )
             )
 
-    def test_services_are_shared(self):
+    def test_services_are_shared(
+        self,
+    ):
         onboarding = (
             self.workspace
             .onboarding_service
@@ -312,6 +396,157 @@ class TestWorkspaceOnboarding(
         self.assertIs(
             onboarding.association_service,
             self.workspace.association_service,
+        )
+
+    def test_preview_prefills_profile_fields(
+        self,
+    ):
+        generated = (
+            self.create_generated_profile()
+        )
+
+        with patch.object(
+            self.workspace.profile_service,
+            "analyze_pdf",
+            return_value=generated.analysis,
+        ), patch.object(
+            self.workspace.profile_service,
+            "build_profile",
+            return_value=generated,
+        ):
+            preview = (
+                self.workspace
+                .onboarding_service
+                .preview_from_bytes(
+                    content=PDF_CONTENT,
+                    original_filename=(
+                        "cv_dsi.pdf"
+                    ),
+                )
+            )
+
+        self.assertEqual(
+            preview.suggested_profile_name,
+            "DSI / CIO",
+        )
+
+        self.assertEqual(
+            preview.suggested_cv_title,
+            "CV DSI / CIO",
+        )
+
+        self.assertIn(
+            "gouvernance si",
+            preview.suggested_keywords,
+        )
+
+        self.assertEqual(
+            preview.detected_role,
+            "DSI / CIO",
+        )
+
+        self.assertEqual(
+            preview.detected_role_score,
+            92.0,
+        )
+
+    def test_preview_does_not_persist_data(
+        self,
+    ):
+        generated = (
+            self.create_generated_profile()
+        )
+
+        with patch.object(
+            self.workspace.profile_service,
+            "analyze_pdf",
+            return_value=generated.analysis,
+        ), patch.object(
+            self.workspace.profile_service,
+            "build_profile",
+            return_value=generated,
+        ):
+            (
+                self.workspace
+                .onboarding_service
+                .preview_from_bytes(
+                    content=PDF_CONTENT,
+                    original_filename="cv.pdf",
+                )
+            )
+
+        self.assertEqual(
+            self.workspace
+            .profile_service
+            .list_profiles(),
+            [],
+        )
+
+        self.assertEqual(
+            self.workspace
+            .cv_service
+            .list_cvs(),
+            [],
+        )
+
+    def test_preview_rejects_empty_content(
+        self,
+    ):
+        with self.assertRaises(
+            WorkspaceOnboardingError
+        ):
+            (
+                self.workspace
+                .onboarding_service
+                .preview_from_bytes(
+                    content=b"",
+                    original_filename="cv.pdf",
+                )
+            )
+
+    def test_create_still_works_after_preview(
+        self,
+    ):
+        generated = (
+            self.create_generated_profile()
+        )
+
+        with patch.object(
+            self.workspace.profile_service,
+            "analyze_pdf",
+            return_value=generated.analysis,
+        ), patch.object(
+            self.workspace.profile_service,
+            "build_profile",
+            return_value=generated,
+        ):
+            (
+                self.workspace
+                .onboarding_service
+                .preview_from_bytes(
+                    content=PDF_CONTENT,
+                    original_filename="cv.pdf",
+                )
+            )
+
+        result = (
+            self.workspace
+            .onboarding_service
+            .create_from_bytes(
+                content=PDF_CONTENT,
+                original_filename="cv.pdf",
+                profile=self.create_profile(),
+                analyze=False,
+            )
+        )
+
+        self.assertEqual(
+            result.profile_id,
+            "dsi_cio",
+        )
+
+        self.assertTrue(
+            result.is_primary
         )
 
 
