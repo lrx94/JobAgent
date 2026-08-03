@@ -34,7 +34,9 @@ from src.workspace.ui.actions import (
     WorkspaceCVActions,
 )
 import hashlib
-
+from src.market import (
+    MarketAnalyzer,
+)
 
 STORAGE_ROOT = (
     Path("data")
@@ -83,6 +85,7 @@ search_service = WorkspaceSearchService(
         workspace.profile_service
     )
 )
+market_analyzer = MarketAnalyzer()
 
 cv_actions = WorkspaceCVActions(
     cv_service=workspace.cv_service,
@@ -1451,7 +1454,189 @@ def render_provider_information(
         st.warning(
             provider_error
         )
-       
+
+def render_market_report(
+    *,
+    profile_id: str,
+    search_result,
+) -> None:
+    st.write("### 📊 Portrait du marché")
+
+    try:
+        context = (
+            search_service
+            .build_context(
+                profile_id
+            )
+        )
+
+        source_jobs = list(
+            getattr(
+                search_result,
+                "all_jobs",
+                [],
+            )
+            or getattr(
+                search_result,
+                "jobs",
+                [],
+            )
+            or []
+        )
+
+        report = market_analyzer.analyze(
+            profile=context.profile,
+            jobs=source_jobs,
+        )
+
+    except Exception as error:
+        st.warning(
+            "L'analyse du marché n'a pas pu "
+            f"être produite : {error}"
+        )
+        return
+
+    st.caption(
+        "Analyse de l'échantillon actuellement "
+        "collecté par les providers JobAgent."
+    )
+
+    metric_jobs, metric_coverage, metric_skills = (
+        st.columns(3)
+    )
+
+    metric_jobs.metric(
+        "Offres analysées",
+        report.total_jobs,
+    )
+
+    metric_coverage.metric(
+        "Couverture du catalogue",
+        f"{report.coverage_percentage:.1f} %",
+    )
+
+    metric_skills.metric(
+        "Compétences distinctes",
+        report.detected_skill_count,
+    )
+
+    for warning in report.warnings:
+        st.warning(warning)
+
+    if report.source_stats:
+        with st.expander(
+            "Couverture par source",
+            expanded=False,
+        ):
+            rows = [
+                {
+                    "Source": item.source,
+                    "Offres": item.job_count,
+                    "Offres avec compétences": (
+                        item.jobs_with_skills
+                    ),
+                    "Couverture": (
+                        f"{item.coverage_percentage:.1f} %"
+                    ),
+                    "Compétences distinctes": (
+                        item.detected_skill_count
+                    ),
+                }
+                for item
+                in report.source_stats
+            ]
+
+            st.dataframe(
+                rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if report.skill_stats:
+        st.write(
+            "#### Compétences les plus demandées"
+        )
+
+        skill_rows = [
+            {
+                "Compétence": item.skill,
+                "Offres": item.job_count,
+                "Fréquence": (
+                    f"{item.percentage:.1f} %"
+                ),
+                "Dans le profil": (
+                    "✅"
+                    if item.present_in_profile
+                    else "—"
+                ),
+            }
+            for item
+            in report.skill_stats
+        ]
+
+        st.dataframe(
+            skill_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    if report.missing_skill_stats:
+        st.write(
+            "#### Principaux écarts du profil"
+        )
+
+        missing_rows = [
+            {
+                "Compétence absente": (
+                    item.skill
+                ),
+                "Offres concernées": (
+                    item.job_count
+                ),
+                "Fréquence": (
+                    f"{item.percentage:.1f} %"
+                ),
+            }
+            for item
+            in report.missing_skill_stats[
+                :10
+            ]
+        ]
+
+        st.dataframe(
+            missing_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    if report.cooccurrences:
+        with st.expander(
+            "Combinaisons de compétences",
+            expanded=False,
+        ):
+            pair_rows = [
+                {
+                    "Compétence 1": (
+                        item.first_skill
+                    ),
+                    "Compétence 2": (
+                        item.second_skill
+                    ),
+                    "Offres": item.job_count,
+                    "Fréquence": (
+                        f"{item.percentage:.1f} %"
+                    ),
+                }
+                for item
+                in report.cooccurrences
+            ]
+
+            st.dataframe(
+                pair_rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+
 def render_search_panel(
     profile: WorkspaceProfileItem | None,
 ) -> None:
@@ -1597,6 +1782,15 @@ def render_search_panel(
         "Offres pertinentes",
         search_result.total_relevant,
     )
+
+    with st.expander(
+        "📊 Analyser le portrait du marché",
+            expanded=False,
+    ):
+        render_market_report(
+            profile_id=profile_id,
+            search_result=search_result,
+        )
 
     jobs = list(
         search_result.jobs
