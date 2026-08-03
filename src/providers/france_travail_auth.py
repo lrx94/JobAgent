@@ -89,6 +89,15 @@ class FranceTravailAuthClient:
             method="POST",
         )
 
+        print(
+            "OAuth URL :",
+            self.config.token_url,
+        )
+
+        print(
+            "OAuth scope :",
+            self.config.scope,
+        )
         response_data = self._execute(
             request
         )
@@ -146,9 +155,19 @@ class FranceTravailAuthClient:
                 body = response.read()
 
         except HTTPError as error:
+
+            try:
+                body = (
+                    error.read()
+                    .decode("utf-8")
+                )
+            except Exception:
+                body = ""
+
             raise RuntimeError(
                 "Erreur OAuth France Travail : "
-                f"HTTP {error.code}."
+                f"HTTP {error.code}\n"
+                f"{body}"
             ) from error
 
         except URLError as error:
