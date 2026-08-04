@@ -17,6 +17,10 @@ from src.analysis.scoring import (
     StructuredScore,
     StructuredScorer,
 )
+from src.analysis.comparison import (
+    ComparativeScoringService,
+    ScoreComparison,
+)
 
 __all__ = [
     "CandidateAnalyzer",
@@ -28,4 +32,6 @@ __all__ = [
     "DimensionScore",
     "StructuredScore",
     "StructuredScorer",
+    "ComparativeScoringService",
+    "ScoreComparison",
 ]
