@@ -38,6 +38,9 @@ from src.market import (
     MarketAnalyzer,
     MarketProfileSkillResolver,
 )
+from src.ui.learning_panel import (
+    render_learning_panel,
+)
 
 STORAGE_ROOT = (
     Path("data")
@@ -66,6 +69,9 @@ ONBOARDING_CV_TITLE_KEY = (
 
 ONBOARDING_KEYWORDS_KEY = (
     "workspace_onboarding_keywords"
+)
+LEARNING_RESULT_KEY_PREFIX = (
+    "workspace_learning_result"
 )
 
 st.set_page_config(
@@ -109,6 +115,40 @@ cv_actions = WorkspaceCVActions(
 
 def rerun() -> None:
     st.rerun()
+
+def learning_cache_key(
+    profile_id: str,
+) -> str:
+    return (
+        f"{LEARNING_RESULT_KEY_PREFIX}_"
+        f"{profile_id}"
+    )
+
+
+def get_learning_result(
+    profile_id: str,
+):
+    return st.session_state.get(
+        learning_cache_key(profile_id)
+    )
+
+
+def set_learning_result(
+    profile_id: str,
+    result,
+) -> None:
+    st.session_state[
+        learning_cache_key(profile_id)
+    ] = result
+
+
+def clear_learning_result(
+    profile_id: str,
+) -> None:
+    st.session_state.pop(
+        learning_cache_key(profile_id),
+        None,
+    )
 
 
 def normalize_csv_values(
@@ -1764,6 +1804,10 @@ def render_search_panel(
             profile_id,
         )
 
+        clear_learning_result(
+            profile_id
+        )
+
         try:
             with st.spinner(
                 "Actualisation des offres..."
@@ -1824,15 +1868,72 @@ def render_search_panel(
         search_result.total_relevant,
     )
 
+    
     with st.expander(
         "📊 Analyser le portrait du marché",
-            expanded=False,
+        expanded=False,
     ):
         render_market_report(
             profile=profile,
             search_result=search_result,
         )
 
+    learning_result = get_learning_result(
+        profile_id
+    )
+
+    if learning_result is None:
+        jobs_for_learning = tuple(
+            getattr(
+                search_result,
+                "all_jobs",
+                None,
+            )
+            or getattr(
+                search_result,
+                "jobs",
+                (),
+            )
+        )
+
+        try:
+            learning_result = (
+                workspace.learning_service
+                .analyze_jobs(
+                    jobs_for_learning
+                )
+            )
+        except Exception as error:
+            st.warning(
+                "Le Learning Engine n'a pas pu "
+                f"analyser cette recherche : {error}"
+            )
+            learning_result = None
+        else:
+            set_learning_result(
+                profile_id,
+                learning_result,
+            )
+
+    if learning_result is not None:
+        with st.expander(
+            "🧠 Learning Engine",
+            expanded=False,
+        ):
+            render_learning_panel(
+                learning_service=(
+                    workspace.learning_service
+                ),
+                suggestions=(
+                    learning_result.stored
+                ),
+                key_prefix=(
+                    f"learning_{profile_id}"
+                ),
+            )
+
+
+ 
     jobs = list(
         search_result.jobs
     )
