@@ -188,3 +188,10 @@ class Workspace:
         )
 
         return self.with_state(state)
+
+    @property
+    def analysis_service(self):
+        return (
+            self.services
+            .analysis_service
+        )

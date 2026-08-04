@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-
+from src.domain import Job
 from src.auth.models import (
     CurrentUser,
     Role,
@@ -307,7 +307,62 @@ class TestWorkspaceSearchService(
             ),
             second,
         )
+    def test_search_without_analysis_service_still_works(
+        self,
+    ):
+        self.create_profile()
 
+        result = self.service.search(
+            "data_engineer"
+        )
+
+        self.assertIsNotNone(result)
+
+    def test_result_jobs_prefers_all_jobs(
+        self,
+    ):
+        first = Job(
+            title="First",
+            company="Example",
+            location="Paris",
+            description="Description",
+            source="Test",
+        )
+
+        second = Job(
+            title="Second",
+            company="Example",
+            location="Paris",
+            description="Description",
+            source="Test",
+        )
+
+        result = type(
+            "Result",
+            (),
+            {
+                "all_jobs": [
+                    first,
+                    second,
+                ],
+                "jobs": [
+                    first,
+                ],
+            },
+        )()
+
+        selected = (
+            WorkspaceSearchService
+            ._result_jobs(result)
+        )
+
+        self.assertEqual(
+            selected,
+            (
+                first,
+                second,
+            ),
+        )
 
 if __name__ == "__main__":
     unittest.main()

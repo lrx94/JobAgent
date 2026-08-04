@@ -14,7 +14,9 @@ from src.profile import Profile
 from src.workspace.exceptions import (
     WorkspaceError,
 )
-
+from src.workspace.analysis_service import (
+    WorkspaceAnalysisService,
+)
 
 class WorkspaceSearchError(
     WorkspaceError
@@ -49,6 +51,9 @@ class WorkspaceSearchService:
         self,
         profile_service: UserCVProfileService,
         workflow: CareerSearchWorkflow | None = None,
+        analysis_service: (
+            WorkspaceAnalysisService | None
+        ) = None,
     ) -> None:
         if not isinstance(
             profile_service,
@@ -77,7 +82,22 @@ class WorkspaceSearchService:
             workflow
             or CareerSearchWorkflow()
         )
-
+        
+        if (
+            analysis_service is not None
+            and not isinstance(
+                analysis_service,
+                WorkspaceAnalysisService,
+            )
+        ):
+            raise TypeError(
+                "analysis_service doit être un "
+                "WorkspaceAnalysisService."
+            )
+        
+        self.analysis_service = (
+            analysis_service
+        )
     @property
     def user_id(self) -> str:
         return self.profile_service.user_id
@@ -146,7 +166,7 @@ class WorkspaceSearchService:
         )
 
         try:
-            return self.workflow.search(
+            result = self.workflow.search(
                 profile=context.profile,
                 selected_role=None,
             )
@@ -154,6 +174,60 @@ class WorkspaceSearchService:
             raise WorkspaceSearchError(
                 "La recherche d'offres a échoué."
             ) from error
+
+        if self.analysis_service is None:
+            return result
+
+        jobs_to_enrich = self._result_jobs(
+            result
+        )
+
+        try:
+            (
+                self.analysis_service
+                .enrich_profile_jobs(
+                    profile_id=(
+                        context.profile_id
+                    ),
+                    jobs=jobs_to_enrich,
+                )
+            )
+        except Exception:
+            # L'observabilité structurée ne doit jamais
+            # empêcher la recherche historique.
+            pass
+
+        return result
+
+    @staticmethod
+    def _result_jobs(
+        result: CareerSearchResult,
+    ) -> tuple:
+        """
+        Récupère l'échantillon le plus large disponible.
+
+        `all_jobs` est prioritaire afin que les offres
+        filtrées restent également observables.
+        """
+
+        all_jobs = getattr(
+            result,
+            "all_jobs",
+            None,
+        )
+
+        if all_jobs:
+            return tuple(all_jobs)
+
+        jobs = getattr(
+            result,
+            "jobs",
+            None,
+        )
+
+        return tuple(
+            jobs or ()
+        )
 
     @staticmethod
     def _build_profile(

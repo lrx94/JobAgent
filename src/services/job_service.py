@@ -106,9 +106,10 @@ class JobService:
         request = SearchRequest.from_profile(
             profile
         )
-
+ 
         jobs = self.search_jobs(request)
-
+ 
+ 
         for job in jobs:
             self._apply_matching(
                 profile=profile,

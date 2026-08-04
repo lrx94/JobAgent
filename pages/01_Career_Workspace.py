@@ -84,7 +84,10 @@ workspace = build_workspace(
 search_service = WorkspaceSearchService(
     profile_service=(
         workspace.profile_service
-    )
+    ),
+    analysis_service=(
+        workspace.analysis_service
+    ),
 )
 market_analyzer = MarketAnalyzer()
 

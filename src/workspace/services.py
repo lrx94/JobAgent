@@ -26,7 +26,9 @@ from src.workspace.exceptions import (
 from src.workspace.onboarding import (
     WorkspaceOnboardingService,
 )
-
+from src.workspace.analysis_service import (
+    WorkspaceAnalysisService,
+)
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceServices:
@@ -44,6 +46,8 @@ class WorkspaceServices:
     association_repository: ProfileCVRepository
     association_service: ProfileCVService
     onboarding_service: WorkspaceOnboardingService
+    analysis_service: WorkspaceAnalysisService
+
     def __post_init__(self) -> None:
         expected_user_id = self.paths.user_id
 
@@ -65,6 +69,9 @@ class WorkspaceServices:
             ),
             "onboarding_service": (
                 self.onboarding_service.user_id
+            ),
+            "analysis_service": (
+                self.analysis_service.user_id
             ),
         }
 
@@ -203,7 +210,26 @@ class WorkspaceServices:
                 "WorkspaceOnboardingService doit utiliser "
                 "le service d'associations partagé."
             )
+        
+        if (
+            self.analysis_service.cv_service
+            is not self.cv_service
+        ):
+            raise WorkspaceConfigurationError(
+                "WorkspaceAnalysisService doit utiliser "
+                "le service CV partagé."
+            )
 
+        if (
+            self.analysis_service
+            .association_service
+            is not self.association_service
+        ):
+            raise WorkspaceConfigurationError(
+                "WorkspaceAnalysisService doit utiliser "
+                "le service d'associations partagé."
+            )
+            
     @property
     def user_id(self) -> str:
         return self.paths.user_id
