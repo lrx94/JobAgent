@@ -12,6 +12,11 @@ from src.analysis.models import (
 from src.analysis.job import (
     JobAnalyzer,
 )
+from src.analysis.scoring import (
+    DimensionScore,
+    StructuredScore,
+    StructuredScorer,
+)
 
 __all__ = [
     "CandidateAnalyzer",
@@ -20,4 +25,7 @@ __all__ = [
     "ManagementScope",
     "StructuredAnalysis",
     "JobAnalyzer",
+    "DimensionScore",
+    "StructuredScore",
+    "StructuredScorer",
 ]
