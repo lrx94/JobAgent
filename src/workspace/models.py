@@ -164,7 +164,13 @@ class Workspace:
             self.services
             .onboarding_service
         )
-    
+    @property
+    def learning_service(self):
+        return (
+            self.services
+            .learning_service
+        )
+        
     def select_onboarding_result(
         self,
         result,

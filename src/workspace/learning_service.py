@@ -96,8 +96,18 @@ class WorkspaceLearningService:
     def __init__(
         self,
         *,
+        user_id: str,
         learning_service: AssistedLearningService,
     ) -> None:
+        normalized_user_id = str(
+            user_id or ""
+        ).strip()
+
+        if not normalized_user_id:
+            raise ValueError(
+                "user_id est obligatoire."
+            )
+
         if not isinstance(
             learning_service,
             AssistedLearningService,
@@ -107,9 +117,13 @@ class WorkspaceLearningService:
                 "AssistedLearningService."
             )
 
-        self.learning_service = (
-            learning_service
-        )
+        self._user_id = normalized_user_id
+        self.learning_service = learning_service
+       
+
+    @property
+    def user_id(self) -> str:
+        return self._user_id  
 
     def analyze_jobs(
         self,
@@ -259,3 +273,7 @@ class WorkspaceLearningService:
             result.append(job)
 
         return tuple(result)
+
+    
+
+        

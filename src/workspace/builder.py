@@ -38,6 +38,15 @@ from src.workspace.state import (
 from src.workspace.onboarding import (
     WorkspaceOnboardingService,
 )
+from src.learning import (
+    AssistedLearningService,
+    LearningSuggestionDetector,
+    LearningSuggestionRepository,
+)
+from src.skills import BUSINESS_CONCEPTS
+from src.workspace.learning_service import (
+    WorkspaceLearningService,
+)
 
 DEFAULT_STORAGE_ROOT = (
     Path("data")
@@ -142,7 +151,42 @@ def build_workspace(
             ),
         )
     )
-    
+    known_learning_terms = tuple(
+        value
+        for concept in BUSINESS_CONCEPTS
+        for value in (
+            concept.label,
+            *concept.aliases,
+        )
+    )
+
+    learning_repository = (
+        LearningSuggestionRepository(
+            paths.learning_suggestions_file
+        )
+    )
+
+    assisted_learning_service = (
+        AssistedLearningService(
+            detector=(
+                LearningSuggestionDetector(
+                    known_terms=known_learning_terms,
+                    minimum_occurrences=3,
+                    minimum_sources=1,
+                )
+            ),
+            repository=learning_repository,
+        )
+    )
+
+    learning_service = (
+        WorkspaceLearningService(
+            user_id=user_context.user_id,
+            learning_service=(
+                assisted_learning_service
+            ),
+        )
+    )
 
     services = WorkspaceServices(
         paths=paths,
@@ -157,6 +201,9 @@ def build_workspace(
         ),
                 onboarding_service=(
             onboarding_service
+        ),
+        learning_service=(
+            learning_service
         ),
     )
 

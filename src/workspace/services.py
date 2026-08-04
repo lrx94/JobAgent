@@ -26,7 +26,9 @@ from src.workspace.exceptions import (
 from src.workspace.onboarding import (
     WorkspaceOnboardingService,
 )
-
+from src.workspace.learning_service import (
+    WorkspaceLearningService,
+)
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceServices:
@@ -44,6 +46,9 @@ class WorkspaceServices:
     association_repository: ProfileCVRepository
     association_service: ProfileCVService
     onboarding_service: WorkspaceOnboardingService
+    learning_service: WorkspaceLearningService
+
+
     def __post_init__(self) -> None:
         expected_user_id = self.paths.user_id
 
@@ -65,6 +70,9 @@ class WorkspaceServices:
             ),
             "onboarding_service": (
                 self.onboarding_service.user_id
+            ),
+            "learning_service": (
+                self.learning_service.user_id
             ),
         }
 
