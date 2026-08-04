@@ -5,7 +5,9 @@ from src.ui.score_utils import (
     score_summary,
     score_progress,
 )
-
+from src.ui.ai_debug import (
+    render_ai_debug,
+)
 
 def display_job(job):
 
@@ -95,6 +97,8 @@ def display_job(job):
 
                     st.write(description)
 
+
+        render_ai_debug(job)
         # Lien
         if job.url:
 
