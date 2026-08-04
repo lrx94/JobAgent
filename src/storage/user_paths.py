@@ -115,6 +115,20 @@ class UserStoragePaths:
         )
 
     @property
+    def learning_directory(self) -> Path:
+        return self._safe_child(
+            self.user_directory,
+            "learning",
+        )
+
+    @property
+    def learning_suggestions_file(self) -> Path:
+        return self._safe_child(
+            self.learning_directory,
+            "suggestions.json",
+        )
+
+    @property
     def settings_file(self) -> Path:
         return self._safe_child(
             self.user_directory,
@@ -234,6 +248,7 @@ class UserStoragePaths:
             self.jobs_directory,
             self.exports_directory,
             self.cache_directory,
+            self.learning_directory,
         )
 
         for directory in directories:
