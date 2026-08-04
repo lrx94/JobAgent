@@ -1,3 +1,6 @@
+from src.analysis.candidate import (
+    CandidateAnalyzer,
+)
 from src.analysis.evidence import (
     Evidence,
 )
@@ -9,6 +12,7 @@ from src.analysis.models import (
 
 
 __all__ = [
+    "CandidateAnalyzer",
     "Evidence",
     "ExperienceRequirement",
     "ManagementScope",
