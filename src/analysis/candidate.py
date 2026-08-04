@@ -13,7 +13,7 @@ from src.analysis.models import (
 from src.career.models import CareerAnalysis
 from src.career.role_detector import RoleDetector
 from src.cvs.results import CVAnalysisResult
-
+from src.skills import ConceptMatcher
 
 class CandidateAnalyzer:
     """
@@ -165,10 +165,16 @@ class CandidateAnalyzer:
     def __init__(
         self,
         role_detector: RoleDetector | None = None,
+        concept_matcher: ConceptMatcher | None = None,
     ) -> None:
         self.role_detector = (
             role_detector
             or RoleDetector()
+        )
+
+        self.concept_matcher = (
+            concept_matcher
+            or ConceptMatcher()
         )
 
     def analyze(
@@ -252,10 +258,18 @@ class CandidateAnalyzer:
                 "n'a été détectée."
             )
 
+        concept_skills = (
+            self.concept_matcher
+            .extract_labels(text)
+        )
+
+        hard_skills = self._merge_values(
+            concept_skills,
+            cv_analysis.skills,
+        )
+        
         return StructuredAnalysis(
-            hard_skills=tuple(
-                cv_analysis.skills
-            ),
+            hard_skills=hard_skills,
             soft_skills=soft_skills,
             seniority=(
                 resolved_career_analysis.seniority
@@ -524,6 +538,32 @@ class CandidateAnalyzer:
                 normalized_text,
             )
         )
+
+    @staticmethod
+    def _merge_values(
+        *collections,
+    ) -> tuple[str, ...]:
+        result: list[str] = []
+        seen: set[str] = set()
+
+        for collection in collections:
+            for value in collection or ():
+                cleaned = str(
+                    value or ""
+                ).strip()
+
+                if not cleaned:
+                    continue
+
+                identity = cleaned.casefold()
+
+                if identity in seen:
+                    continue
+
+                seen.add(identity)
+                result.append(cleaned)
+
+        return tuple(result)
 
     @staticmethod
     def _excerpt(

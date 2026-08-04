@@ -55,11 +55,16 @@ class JobAnalyzer(
         *,
         skill_extractor: Any | None = None,
         role_detector: RoleDetector | None = None,
+        concept_matcher=None,
     ) -> None:
+
+        
         super().__init__(
-            role_detector=role_detector
+            role_detector=role_detector,
+            concept_matcher=concept_matcher,
         )
 
+       
         self.skill_extractor = (
             skill_extractor
             or SkillExtractor()
@@ -87,7 +92,13 @@ class JobAnalyzer(
             )
         )
 
+        concept_skills = (
+            self.concept_matcher
+            .extract_labels(text)
+        )
+
         hard_skills = self._merge_skills(
+            concept_skills,
             extracted_skills,
             job.skills,
         )
