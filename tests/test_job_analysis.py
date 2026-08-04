@@ -250,6 +250,31 @@ class TestJobAnalyzer(
                 object()
             )
 
+    def test_adds_business_concepts_to_job_skills(
+        self,
+    ):
+        result = self.analyzer.analyze_job(
+            self.create_job(
+                "Le poste nécessite une certification "
+                "ITILv4, le pilotage de projets et la "
+                "gouvernance du système d'information."
+            )
+        )
+
+        self.assertIn(
+            "ITIL",
+            result.hard_skills,
+        )
+
+        self.assertIn(
+            "Gestion de projet",
+            result.hard_skills,
+        )
+
+        self.assertIn(
+            "Gouvernance SI",
+            result.hard_skills,
+        )
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,14 +46,9 @@ class TestCandidateAnalyzer(
         self,
     ):
         cv_analysis = CVAnalysisResult(
-            text=(
-                "DSI avec une expérience "
-                "en gouvernance."
-            ),
-            skills=(
-                "ITIL",
-                "Azure",
-            ),
+            text= "Profil technique expérimenté.",
+            skills= ("itil","azure",),
+            
         )
 
         result = self.analyzer.analyze(
@@ -290,6 +285,69 @@ class TestCandidateAnalyzer(
                     result.management.budget_amount,
                     expected,
                 )
+    def test_adds_business_concepts_to_hard_skills(
+        self,
+    ):
+        result = self.analyzer.analyze(
+            cv_analysis=CVAnalysisResult(
+                text=(
+                    "Certification ITILv4. "
+                    "Pilotage de projets et "
+                    "gouvernance COMEX avec "
+                    "priorisation et arbitrage stratégique."
+                ),
+                skills=(),
+            ),
+            career_analysis=(
+                self.create_career_analysis()
+            ),
+        )
 
+        self.assertIn(
+            "ITIL",
+            result.hard_skills,
+        )
+
+        self.assertIn(
+            "Gestion de projet",
+            result.hard_skills,
+        )
+
+        self.assertIn(
+            "Gouvernance SI",
+            result.hard_skills,
+        )
+    def test_canonical_concept_replaces_existing_case_variant(
+        self,
+    ):
+        result = self.analyzer.analyze(
+            cv_analysis=CVAnalysisResult(
+                text=(
+                    "Gouvernance COMEX et "
+                    "pilotage de projets."
+                ),
+                skills=(
+                    "gouvernance si",
+                ),
+            ),
+            career_analysis=(
+                self.create_career_analysis()
+            ),
+        )
+
+        self.assertIn(
+            "Gouvernance SI",
+            result.hard_skills,
+        )
+
+        self.assertNotIn(
+            "gouvernance si",
+            result.hard_skills,
+        )
+
+        self.assertIn(
+            "Gestion de projet",
+            result.hard_skills,
+        )
 if __name__ == "__main__":
     unittest.main()
