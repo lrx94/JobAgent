@@ -208,11 +208,14 @@ class CandidateAnalyzer:
             )
 
         experience = self._extract_experience(
-            text
+            text,
+            source="cv",
+            required=False,
         )
 
         management = self._extract_management(
-            text
+            text,
+            source="cv",
         )
 
         soft_skills = self._extract_catalog_values(
@@ -268,6 +271,9 @@ class CandidateAnalyzer:
     def _extract_experience(
         self,
         text: str,
+        *,
+        source: str,
+        required: bool,
     ) -> tuple[ExperienceRequirement, ...]:
         matches: list[
             ExperienceRequirement
@@ -287,23 +293,21 @@ class CandidateAnalyzer:
 
             seen_years.add(years)
 
-            excerpt = self._excerpt(
-                text,
-                match.start(),
-                match.end(),
-            )
-
             evidence = Evidence(
                 value=f"{years:g} ans",
-                source="cv",
-                excerpt=excerpt,
+                source=source,
+                excerpt=self._excerpt(
+                    text,
+                    match.start(),
+                    match.end(),
+                ),
                 confidence=0.9,
             )
 
             matches.append(
                 ExperienceRequirement(
                     years=years,
-                    required=False,
+                    required=required,
                     evidence=(
                         evidence,
                     ),
@@ -322,6 +326,8 @@ class CandidateAnalyzer:
     def _extract_management(
         self,
         text: str,
+        *,
+        source: str,
     ) -> ManagementScope:
         normalized = self._normalize_text(
             text
@@ -350,7 +356,7 @@ class CandidateAnalyzer:
                     value=(
                         f"Équipe de {team_size} personnes"
                     ),
-                    source="cv",
+                    source=source,
                     excerpt=self._excerpt(
                         text,
                         team_match.start(),
@@ -398,7 +404,7 @@ class CandidateAnalyzer:
                     value=(
                         f"Budget de {budget_amount} €"
                     ),
-                    source="cv",
+                    source=source,
                     excerpt=self._excerpt(
                         text,
                         budget_match.start(),

@@ -9,7 +9,9 @@ from src.analysis.models import (
     ManagementScope,
     StructuredAnalysis,
 )
-
+from src.analysis.job import (
+    JobAnalyzer,
+)
 
 __all__ = [
     "CandidateAnalyzer",
@@ -17,4 +19,5 @@ __all__ = [
     "ExperienceRequirement",
     "ManagementScope",
     "StructuredAnalysis",
+    "JobAnalyzer",
 ]
