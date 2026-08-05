@@ -5,7 +5,7 @@ from collections.abc import Iterable
 
 from src.domain import Job
 from src.learning.models import LearningObservation
-
+from src.analysis import JobAnalyzer
 
 class JobLearningObservationExtractor:
     """
@@ -73,9 +73,15 @@ class JobLearningObservationExtractor:
     def __init__(
         self,
         *,
+        analyzer: JobAnalyzer | None = None,
         stop_terms: Iterable[str] = (),
         context_radius: int = 90,
     ) -> None:
+        self.analyzer = (
+            analyzer
+            or JobAnalyzer()
+        )
+
         self.stop_terms = {
             str(value or "").strip().casefold()
             for value in (
@@ -131,45 +137,83 @@ class JobLearningObservationExtractor:
             or "unknown"
         )
 
-        for skill in job.skills or ():
-            self._append_observation(
-                observations=observations,
-                seen=seen,
-                term=skill,
-                source=source,
-                reference_id=reference_id,
-                context=job.title,
-            )
-
-        text = "\n".join(
-            value
-            for value in (
-                job.title,
-                job.description,
-            )
-            if str(value or "").strip()
+        analysis = self.analyzer.analyze_job(
+            job
         )
 
-        for match in self.TECH_TERM_PATTERN.finditer(text):
-            term = match.group(1).strip()
+        structured_terms_list: list[str] = []
+        structured_terms_seen: set[str] = set()
 
-            if not self._is_candidate(term):
-                continue
-
-            context = self._excerpt(
-                text=text,
-                start=match.start(),
-                end=match.end(),
+        for term in (
+            *(job.skills or ()),
+            *analysis.hard_skills,
+            *analysis.certifications,
+        ):
+            cleaned = " ".join(
+                str(term or "").split()
             )
 
+            if not cleaned:
+                continue
+
+            identity = cleaned.casefold()
+
+            if identity in structured_terms_seen:
+                continue
+
+            structured_terms_seen.add(identity)
+            structured_terms_list.append(cleaned)
+
+        structured_terms = tuple(
+            structured_terms_list
+        )
+
+        for term in structured_terms:
             self._append_observation(
                 observations=observations,
                 seen=seen,
                 term=term,
                 source=source,
                 reference_id=reference_id,
-                context=context,
+                context=job.title,
             )
+
+        # Le texte brut n'est utilisé qu'en dernier recours.
+        if not structured_terms:
+            text = "\n".join(
+                value
+                for value in (
+                    job.title,
+                    job.description,
+                )
+                if str(value or "").strip()
+            )
+
+            for match in (
+                self.TECH_TERM_PATTERN
+                .finditer(text)
+            ):
+                term = match.group(1).strip()
+
+                if not self._is_candidate(term):
+                    continue
+
+                context = self._excerpt(
+                    text=text,
+                    start=match.start(),
+                    end=match.end(),
+                )
+
+                self._append_observation(
+                    observations=observations,
+                    seen=seen,
+                    term=term,
+                    source=source,
+                    reference_id=reference_id,
+                    context=context,
+                )
+
+            
 
         return tuple(observations)
 
