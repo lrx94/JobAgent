@@ -2025,7 +2025,40 @@ def render_search_panel(
                 learning_result,
             )
 
+    
     if learning_result is not None:
+        learning_success = (
+            st.session_state.pop(
+                "learning_action_success",
+                None,
+            )
+        )
+
+        if learning_success:
+            st.success(
+                learning_success
+            )
+
+        try:
+            current_learning_suggestions = (
+                workspace.learning_service
+                .list_suggestions()
+            )
+        except Exception as error:
+            st.warning(
+                "Impossible de rafraîchir les "
+                f"suggestions : {error}"
+            )
+
+            current_learning_suggestions = (
+                learning_result.stored
+            )
+
+        def refresh_learning_after_action() -> None:
+            clear_learning_result(
+                profile_id
+            )
+
         with st.expander(
             "🧠 Learning Engine",
             expanded=False,
@@ -2035,13 +2068,15 @@ def render_search_panel(
                     workspace.learning_service
                 ),
                 suggestions=(
-                    learning_result.stored
+                    current_learning_suggestions
                 ),
                 key_prefix=(
                     f"learning_{profile_id}"
                 ),
+                on_action_success=(
+                    refresh_learning_after_action
+                ),
             )
-
 
  
     jobs = list(
