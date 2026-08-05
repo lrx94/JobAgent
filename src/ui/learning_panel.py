@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import streamlit as st
@@ -14,11 +14,36 @@ from src.workspace.learning_service import (
 )
 
 
+STATUS_DISPLAY = {
+    SuggestionStatus.CANDIDATE: {
+        "icon": "🟡",
+        "label": "À examiner",
+        "section": "À examiner",
+    },
+    SuggestionStatus.ACCEPTED: {
+        "icon": "✅",
+        "label": "Acceptée",
+        "section": "Acceptées",
+    },
+    SuggestionStatus.REJECTED: {
+        "icon": "❌",
+        "label": "Rejetée",
+        "section": "Rejetées",
+    },
+    SuggestionStatus.IGNORED: {
+        "icon": "⏸️",
+        "label": "Ignorée",
+        "section": "Ignorées",
+    },
+}
+
+
 def render_learning_panel(
     *,
     learning_service: WorkspaceLearningService,
     suggestions: Iterable[LearningSuggestion],
     key_prefix: str = "learning",
+    on_action_success: Callable[[], None] | None = None,
 ) -> None:
     if not isinstance(
         learning_service,
@@ -29,14 +54,142 @@ def render_learning_panel(
             "WorkspaceLearningService."
         )
 
-    candidates = tuple(
+    values = tuple(
+        suggestion
+        for suggestion in suggestions or ()
+        if isinstance(
+            suggestion,
+            LearningSuggestion,
+        )
+    )
+
+    if not values:
+        st.info(
+            "Aucune suggestion d'enrichissement."
+        )
+        return
+
+    grouped = {
+        status: _sort_suggestions(
+            suggestion
+            for suggestion in values
+            if suggestion.status == status
+        )
+        for status in (
+            SuggestionStatus.CANDIDATE,
+            SuggestionStatus.ACCEPTED,
+            SuggestionStatus.REJECTED,
+            SuggestionStatus.IGNORED,
+        )
+    }
+
+    candidate_count = len(
+        grouped[
+            SuggestionStatus.CANDIDATE
+        ]
+    )
+
+    accepted_count = len(
+        grouped[
+            SuggestionStatus.ACCEPTED
+        ]
+    )
+
+    rejected_count = len(
+        grouped[
+            SuggestionStatus.REJECTED
+        ]
+    )
+
+    ignored_count = len(
+        grouped[
+            SuggestionStatus.IGNORED
+        ]
+    )
+
+    metric_columns = st.columns(4)
+
+    metric_columns[0].metric(
+        "À examiner",
+        candidate_count,
+    )
+
+    metric_columns[1].metric(
+        "Acceptées",
+        accepted_count,
+    )
+
+    metric_columns[2].metric(
+        "Rejetées",
+        rejected_count,
+    )
+
+    metric_columns[3].metric(
+        "Ignorées",
+        ignored_count,
+    )
+
+    if candidate_count == 0:
+        st.success(
+            "Toutes les suggestions ont été examinées."
+        )
+    else:
+        st.caption(
+            f"{candidate_count} suggestion(s) "
+            "restent à examiner."
+        )
+
+    _render_status_section(
+        status=SuggestionStatus.CANDIDATE,
+        suggestions=grouped[
+            SuggestionStatus.CANDIDATE
+        ],
+        learning_service=learning_service,
+        key_prefix=key_prefix,
+        on_action_success=on_action_success,
+        expanded=True,
+    )
+
+    _render_status_section(
+        status=SuggestionStatus.ACCEPTED,
+        suggestions=grouped[
+            SuggestionStatus.ACCEPTED
+        ],
+        learning_service=learning_service,
+        key_prefix=key_prefix,
+        on_action_success=on_action_success,
+        expanded=False,
+    )
+
+    _render_status_section(
+        status=SuggestionStatus.REJECTED,
+        suggestions=grouped[
+            SuggestionStatus.REJECTED
+        ],
+        learning_service=learning_service,
+        key_prefix=key_prefix,
+        on_action_success=on_action_success,
+        expanded=False,
+    )
+
+    _render_status_section(
+        status=SuggestionStatus.IGNORED,
+        suggestions=grouped[
+            SuggestionStatus.IGNORED
+        ],
+        learning_service=learning_service,
+        key_prefix=key_prefix,
+        on_action_success=on_action_success,
+        expanded=False,
+    )
+
+
+def _sort_suggestions(
+    suggestions: Iterable[LearningSuggestion],
+) -> tuple[LearningSuggestion, ...]:
+    return tuple(
         sorted(
-            (
-                suggestion
-                for suggestion in suggestions or ()
-                if suggestion.status
-                == SuggestionStatus.CANDIDATE
-            ),
+            suggestions,
             key=lambda suggestion: (
                 -suggestion.confidence,
                 -suggestion.occurrence_count,
@@ -45,23 +198,47 @@ def render_learning_panel(
         )
     )
 
-    if not candidates:
-        st.info(
-            "Aucune nouvelle suggestion "
-            "d'enrichissement."
-        )
-        return
 
-    st.caption(
-        f"{len(candidates)} suggestion(s) à examiner."
+def _render_status_section(
+    *,
+    status: SuggestionStatus,
+    suggestions: tuple[
+        LearningSuggestion,
+        ...
+    ],
+    learning_service: WorkspaceLearningService,
+    key_prefix: str,
+    on_action_success: Callable[[], None] | None,
+    expanded: bool,
+) -> None:
+    display = STATUS_DISPLAY[status]
+
+    section_title = (
+        f"{display['icon']} "
+        f"{display['section']} "
+        f"({len(suggestions)})"
     )
 
-    for suggestion in candidates:
-        _render_suggestion(
-            learning_service=learning_service,
-            suggestion=suggestion,
-            key_prefix=key_prefix,
-        )
+    with st.expander(
+        section_title,
+        expanded=(
+            expanded
+            and bool(suggestions)
+        ),
+    ):
+        if not suggestions:
+            st.caption(
+                "Aucune suggestion dans cette catégorie."
+            )
+            return
+
+        for suggestion in suggestions:
+            _render_suggestion(
+                learning_service=learning_service,
+                suggestion=suggestion,
+                key_prefix=key_prefix,
+                on_action_success=on_action_success,
+            )
 
 
 def _render_suggestion(
@@ -69,19 +246,36 @@ def _render_suggestion(
     learning_service: WorkspaceLearningService,
     suggestion: LearningSuggestion,
     key_prefix: str,
+    on_action_success: Callable[[], None] | None,
 ) -> None:
     label = (
         suggestion.observed_term
         or suggestion.normalized_term
     )
 
-    with st.expander(
-        (
-            f"⭐ {label} — "
-            f"{suggestion.occurrence_count} occurrence(s)"
-        ),
-        expanded=False,
+    status_display = STATUS_DISPLAY[
+        suggestion.status
+    ]
+
+    card_title = (
+        f"{status_display['icon']} "
+        f"{label} — "
+        f"{suggestion.occurrence_count} "
+        "occurrence(s)"
+    )
+
+    with st.container(
+        border=True,
     ):
+        st.write(
+            f"#### {card_title}"
+        )
+
+        st.caption(
+            "Statut : "
+            f"**{status_display['label']}**"
+        )
+
         metric_columns = st.columns(3)
 
         metric_columns[0].metric(
@@ -96,79 +290,216 @@ def _render_suggestion(
 
         metric_columns[2].metric(
             "Confiance",
-            f"{suggestion.confidence * 100:.0f} %",
+            (
+                f"{suggestion.confidence * 100:.0f} %"
+            ),
         )
 
         if suggestion.sources:
             st.caption(
                 "Sources : "
-                + ", ".join(suggestion.sources)
+                + ", ".join(
+                    suggestion.sources
+                )
             )
 
         if suggestion.contexts:
-            st.write("**Exemples observés**")
+            with st.expander(
+                "Voir les exemples observés",
+                expanded=False,
+            ):
+                for context in (
+                    suggestion.contexts[:3]
+                ):
+                    st.write(
+                        f"- {context}"
+                    )
 
-            for context in suggestion.contexts[:2]:
-                st.write(f"- {context}")
+        _render_actions(
+            learning_service=learning_service,
+            suggestion=suggestion,
+            label=label,
+            key_prefix=key_prefix,
+            on_action_success=on_action_success,
+        )
 
-        action_columns = st.columns(3)
 
-        accepted = action_columns[0].button(
-            "Accepter",
+def _render_actions(
+    *,
+    learning_service: WorkspaceLearningService,
+    suggestion: LearningSuggestion,
+    label: str,
+    key_prefix: str,
+    on_action_success: Callable[[], None] | None,
+) -> None:
+    status = suggestion.status
+
+    if status == SuggestionStatus.CANDIDATE:
+        columns = st.columns(3)
+
+        if columns[0].button(
+            "✅ Accepter",
             key=(
                 f"{key_prefix}_accept_"
                 f"{suggestion.suggestion_id}"
             ),
-            use_container_width=True,
-        )
+            width="stretch",
+        ):
+            _apply_action(
+                action=learning_service.accept,
+                suggestion=suggestion,
+                success_message=(
+                    f"✅ Suggestion « {label} » "
+                    "acceptée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
+            )
 
-        ignored = action_columns[1].button(
-            "Ignorer",
+        if columns[1].button(
+            "⏸️ Ignorer",
             key=(
                 f"{key_prefix}_ignore_"
                 f"{suggestion.suggestion_id}"
             ),
-            use_container_width=True,
-        )
+            width="stretch",
+        ):
+            _apply_action(
+                action=learning_service.ignore,
+                suggestion=suggestion,
+                success_message=(
+                    f"⏸️ Suggestion « {label} » "
+                    "ignorée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
+            )
 
-        rejected = action_columns[2].button(
-            "Rejeter",
+        if columns[2].button(
+            "❌ Rejeter",
             key=(
                 f"{key_prefix}_reject_"
                 f"{suggestion.suggestion_id}"
             ),
-            use_container_width=True,
-        )
-
-        if accepted:
+            width="stretch",
+        ):
             _apply_action(
-                learning_service.accept,
-                suggestion.suggestion_id,
-                "Suggestion acceptée.",
+                action=learning_service.reject,
+                suggestion=suggestion,
+                success_message=(
+                    f"❌ Suggestion « {label} » "
+                    "rejetée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
             )
 
-        if ignored:
+        return
+
+    if status == SuggestionStatus.ACCEPTED:
+        if st.button(
+            "❌ Rejeter cette suggestion",
+            key=(
+                f"{key_prefix}_accepted_reject_"
+                f"{suggestion.suggestion_id}"
+            ),
+            width="stretch",
+        ):
             _apply_action(
-                learning_service.ignore,
-                suggestion.suggestion_id,
-                "Suggestion ignorée.",
+                action=learning_service.reject,
+                suggestion=suggestion,
+                success_message=(
+                    f"❌ Suggestion « {label} » "
+                    "désormais rejetée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
             )
 
-        if rejected:
+        return
+
+    if status == SuggestionStatus.REJECTED:
+        if st.button(
+            "✅ Accepter cette suggestion",
+            key=(
+                f"{key_prefix}_rejected_accept_"
+                f"{suggestion.suggestion_id}"
+            ),
+            width="stretch",
+        ):
             _apply_action(
-                learning_service.reject,
-                suggestion.suggestion_id,
-                "Suggestion rejetée.",
+                action=learning_service.accept,
+                suggestion=suggestion,
+                success_message=(
+                    f"✅ Suggestion « {label} » "
+                    "désormais acceptée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
+            )
+
+        return
+
+    if status == SuggestionStatus.IGNORED:
+        columns = st.columns(2)
+
+        if columns[0].button(
+            "✅ Accepter",
+            key=(
+                f"{key_prefix}_ignored_accept_"
+                f"{suggestion.suggestion_id}"
+            ),
+            width="stretch",
+        ):
+            _apply_action(
+                action=learning_service.accept,
+                suggestion=suggestion,
+                success_message=(
+                    f"✅ Suggestion « {label} » "
+                    "acceptée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
+            )
+
+        if columns[1].button(
+            "❌ Rejeter",
+            key=(
+                f"{key_prefix}_ignored_reject_"
+                f"{suggestion.suggestion_id}"
+            ),
+            width="stretch",
+        ):
+            _apply_action(
+                action=learning_service.reject,
+                suggestion=suggestion,
+                success_message=(
+                    f"❌ Suggestion « {label} » "
+                    "rejetée."
+                ),
+                on_action_success=(
+                    on_action_success
+                ),
             )
 
 
 def _apply_action(
+    *,
     action: Any,
-    suggestion_id: str,
+    suggestion: LearningSuggestion,
     success_message: str,
+    on_action_success: Callable[[], None] | None,
 ) -> None:
     try:
-        action(suggestion_id)
+        action(
+            suggestion.suggestion_id
+        )
     except Exception as error:
         st.error(
             "Impossible de mettre à jour "
@@ -176,5 +507,11 @@ def _apply_action(
         )
         return
 
-    st.success(success_message)
+    if on_action_success is not None:
+        on_action_success()
+
+    st.session_state[
+        "learning_action_success"
+    ] = success_message
+
     st.rerun()
