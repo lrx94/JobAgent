@@ -41,6 +41,9 @@ from src.market import (
 from src.ui.learning_panel import (
     render_learning_panel,
 )
+from src.workspace.profile_delete_service import (
+    ProfileDeleteService,
+)
 
 STORAGE_ROOT = (
     Path("data")
@@ -633,21 +636,128 @@ def render_navigation(
             SELECTED_PROFILE_KEY
         ] = profile_ids[0]
 
-    selected_id = st.radio(
-        "Profils existants",
-        options=profile_ids,
-        key=SELECTED_PROFILE_KEY,
-        format_func=lambda profile_id: (
-            profiles_by_id[
-                profile_id
-            ].display_name
-        ),
-        label_visibility="visible",
+    selection_column, action_column = (
+        st.columns([5, 1])
     )
 
-    selected_profile = profiles_by_id[
-        selected_id
-    ]
+    with selection_column:
+        selected_id = st.radio(
+            "Profils existants",
+            options=profile_ids,
+            key=SELECTED_PROFILE_KEY,
+            format_func=lambda profile_id: (
+                profiles_by_id[
+                    profile_id
+                ].display_name
+            ),
+            label_visibility="visible",
+        )
+
+    selected_profile = (
+        profiles_by_id[
+            selected_id
+        ]
+    )
+
+    with action_column:
+        st.write("")
+        st.write("")
+
+        delete_profile = st.button(
+            "🗑️",
+            key=(
+                "delete_profile_"
+                f"{selected_profile.profile_id}"
+            ),
+            help="Supprimer ce profil",
+            use_container_width=True,
+        )
+
+    if delete_profile:
+        st.session_state[
+            "confirm_delete_profile"
+        ] = selected_profile.profile_id
+
+    if (
+        st.session_state.get(
+            "confirm_delete_profile"
+        )
+        == selected_profile.profile_id
+    ):
+        st.warning(
+            "Supprimer définitivement le profil "
+            f"**{selected_profile.display_name}** ?"
+        )
+
+        yes_column, no_column = (
+            st.columns(2)
+        )
+
+        with yes_column:
+            confirm_delete = st.button(
+                "Oui",
+                type="primary",
+                key=(
+                    "confirm_delete_profile_"
+                    f"{selected_profile.profile_id}"
+                ),
+                use_container_width=True,
+            )
+
+        with no_column:
+            cancel_delete = st.button(
+                "Annuler",
+                key=(
+                    "cancel_delete_profile_"
+                    f"{selected_profile.profile_id}"
+                ),
+                use_container_width=True,
+            )
+
+        if cancel_delete:
+            st.session_state.pop(
+                "confirm_delete_profile",
+                None,
+            )
+            rerun()
+
+        if confirm_delete:
+            try:
+                ProfileDeleteService(
+                    workspace.services.paths
+                ).delete(
+                    selected_profile.profile_id
+                )
+            except Exception as error:
+                st.error(
+                    "Impossible de supprimer "
+                    f"le profil : {error}"
+                )
+            else:
+                WorkspaceSearchCache.clear(
+                    st.session_state,
+                    selected_profile.profile_id,
+                )
+
+                clear_learning_result(
+                    selected_profile.profile_id
+                )
+
+                st.session_state.pop(
+                    "confirm_delete_profile",
+                    None,
+                )
+
+                st.session_state.pop(
+                    SELECTED_PROFILE_KEY,
+                    None,
+                )
+
+                st.success(
+                    "Profil supprimé."
+                )
+
+                rerun()
 
     if not selected_profile.cvs:
         st.caption(
