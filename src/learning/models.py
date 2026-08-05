@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-
+from src.learning.origin import (
+    LearningObservationOrigin,
+)
 
 class SuggestionType(StrEnum):
     SKILL = "skill"
@@ -29,11 +31,14 @@ class LearningObservation:
     Le texte complet n'est pas conservé : uniquement
     un court contexte facilitant la validation humaine.
     """
-
+    
     term: str
     source: str
     reference_id: str | None = None
     context: str = ""
+    origin: LearningObservationOrigin = (
+        LearningObservationOrigin.UNKNOWN
+    )
 
     def __post_init__(self) -> None:
         term = str(
@@ -118,6 +123,10 @@ class LearningSuggestion:
     status: SuggestionStatus = (
         SuggestionStatus.CANDIDATE
     )
+    origins: tuple[
+        LearningObservationOrigin,
+        ...
+    ] = ()
 
     def __post_init__(self) -> None:
         suggestion_id = str(

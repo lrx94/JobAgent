@@ -12,7 +12,8 @@ from src.learning import (
 from src.workspace.learning_service import (
     WorkspaceLearningService,
 )
-
+import csv
+import io
 
 STATUS_DISPLAY = {
     SuggestionStatus.CANDIDATE: {
@@ -36,7 +37,75 @@ STATUS_DISPLAY = {
         "section": "Ignorées",
     },
 }
+def build_learning_export_csv(
+    suggestions: Iterable[LearningSuggestion],
+) -> bytes:
+    """
+    Produit un export CSV exploitable pour analyser
+    les suggestions du Learning Engine.
+    """
 
+    output = io.StringIO(
+        newline=""
+    )
+
+    writer = csv.writer(
+        output,
+        delimiter=";",
+    )
+
+    writer.writerow(
+        (
+            "suggestion_id",
+            "terme_observe",
+            "terme_normalise",
+            "statut",
+            "type",
+            "occurrences",
+            "nombre_sources",
+            "sources",
+            "origines",
+            "confiance",
+            "cible_canonique",
+            "contextes",
+        )
+    )
+
+    for suggestion in suggestions or ():
+        if not isinstance(
+            suggestion,
+            LearningSuggestion,
+        ):
+            continue
+
+        writer.writerow(
+            (
+                suggestion.suggestion_id,
+                suggestion.observed_term,
+                suggestion.normalized_term,
+                suggestion.status.value,
+                suggestion.suggestion_type.value,
+                suggestion.occurrence_count,
+                suggestion.source_count,
+                " | ".join(
+                    suggestion.sources
+                ),
+                " | ".join(
+                    origin.value
+                    for origin
+                    in suggestion.origins
+                ),
+                f"{suggestion.confidence:.3f}",
+                suggestion.canonical_target or "",
+                " | ".join(
+                    suggestion.contexts
+                ),
+            )
+        )
+
+    return output.getvalue().encode(
+        "utf-8-sig"
+    )
 
 def render_learning_panel(
     *,
@@ -68,7 +137,22 @@ def render_learning_panel(
             "Aucune suggestion d'enrichissement."
         )
         return
+    export_data = (
+    build_learning_export_csv(
+            values
+        )
+    )
 
+    st.download_button(
+        "📤 Exporter les suggestions",
+        data=export_data,
+        file_name=(
+            "jobagent_learning_suggestions.csv"
+        ),
+        mime="text/csv",
+        key=f"{key_prefix}_export",
+        width="stretch",
+    )
     grouped = {
         status: _sort_suggestions(
             suggestion

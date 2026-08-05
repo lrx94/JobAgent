@@ -16,7 +16,9 @@ from src.learning.repository import (
 from src.learning.service import (
     AssistedLearningService,
 )
-
+from src.learning.origin import (
+    LearningObservationOrigin,
+)
 
 __all__ = [
     "AssistedLearningService",
@@ -27,4 +29,5 @@ __all__ = [
     "LearningSuggestionRepository",
     "SuggestionStatus",
     "SuggestionType",
-]
+    "LearningObservationOrigin",
+    ]

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.learning import (
+    LearningObservationOrigin,
     LearningSuggestion,
     LearningSuggestionRepository,
     SuggestionStatus,
@@ -150,6 +151,41 @@ class TestLearningSuggestionRepository(
                 ),
             )
 
+    def test_persists_suggestion_origins(
+        self,
+    ) -> None:
+        suggestion = LearningSuggestion(
+            suggestion_id="skill-finops",
+            observed_term="FinOps",
+            normalized_term="finops",
+            suggestion_type=(
+                SuggestionType.SKILL
+            ),
+            occurrence_count=3,
+            source_count=2,
+            sources=(
+                "france travail",
+                "remoteok",
+            ),
+            contexts=(),
+            confidence=0.7,
+            origins=(
+                LearningObservationOrigin
+                .JOB_ANALYZER,
+                LearningObservationOrigin
+                .RAW_TEXT_FALLBACK,
+            ),
+        )
 
+        self.repository.save_many(
+            (suggestion,)
+        )
+
+        loaded = self.repository.list_all()
+
+        self.assertEqual(
+            loaded[0].origins,
+            suggestion.origins,
+        )
 if __name__ == "__main__":
     unittest.main()

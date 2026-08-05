@@ -6,7 +6,11 @@ from src.learning import (
     LearningObservation,
     LearningSuggestionDetector,
 )
-
+from src.learning import (
+    LearningObservation,
+    LearningObservationOrigin,
+    LearningSuggestionDetector,
+)
 
 class TestLearningSuggestionDetector(
     unittest.TestCase
@@ -32,12 +36,16 @@ class TestLearningSuggestionDetector(
         source: str = "France Travail",
         reference_id: str | None = None,
         context: str = "",
+        origin: LearningObservationOrigin = (
+            LearningObservationOrigin.UNKNOWN
+        ),
     ) -> LearningObservation:
         return LearningObservation(
             term=term,
             source=source,
             reference_id=reference_id,
             context=context,
+            origin=origin,
         )
 
     def test_detects_frequent_unknown_term(
@@ -209,6 +217,261 @@ class TestLearningSuggestionDetector(
                 [object()]
             )
 
+    def test_quality_gate_rejects_noise(
+        self,
+    ):
+        blocked_terms = (
+            "Description du poste",
+            "Systèmes d",
+            "Companies can search",
+            "avoid spam applicants",
+            "and tag RMmEwMT123456789",
+            "Une mutuelle santé",
+            "Épargne à 5 %",
+            "https://example.com/apply",
+        )
+
+        observations = tuple(
+            self.observation(
+                term,
+                reference_id=(
+                    f"job-{term_index}-"
+                    f"{occurrence_index}"
+                ),
+            )
+            for term_index, term
+            in enumerate(blocked_terms)
+            for occurrence_index
+            in range(3)
+        )
+
+        self.assertEqual(
+            self.detector.detect(
+                observations
+            ),
+            (),
+        )
+
+    def test_quality_gate_keeps_credible_terms(
+        self,
+    ):
+        credible_terms = (
+            "Microsoft Fabric",
+            "FinOps",
+            "Transformation SI",
+            "Prompt Engineering",
+        )
+
+        observations = tuple(
+            self.observation(
+                term,
+                reference_id=(
+                    f"job-{term_index}-"
+                    f"{occurrence_index}"
+                ),
+            )
+            for term_index, term
+            in enumerate(credible_terms)
+            for occurrence_index
+            in range(3)
+        )
+
+        suggestions = self.detector.detect(
+            observations
+        )
+
+        normalized_terms = {
+            suggestion.normalized_term
+            for suggestion in suggestions
+        }
+
+        self.assertEqual(
+            normalized_terms,
+            {
+                "microsoft fabric",
+                "finops",
+                "transformation si",
+                "prompt engineering",
+            },
+        )
+    def test_aggregates_observation_origins(
+        self,
+    ) -> None:
+        observations = (
+            self.observation(
+                "FinOps",
+                reference_id="ft-1",
+            ),
+            LearningObservation(
+                term="FinOps",
+                source="RemoteOK",
+                reference_id="remote-1",
+                context="FinOps platform.",
+                origin=(
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                ),
+            ),
+            LearningObservation(
+                term="FinOps",
+                source="France Travail",
+                reference_id="ft-2",
+                context="Pilotage FinOps.",
+                origin=(
+                    LearningObservationOrigin
+                    .JOB_ANALYZER
+                ),
+            ),
+        )
+
+        suggestions = self.detector.detect(
+            observations
+        )
+
+        self.assertEqual(
+            len(suggestions),
+            1,
+        )
+
+        self.assertEqual(
+            suggestions[0].origins,
+            (
+                LearningObservationOrigin
+                .JOB_ANALYZER,
+                LearningObservationOrigin
+                .RAW_TEXT_FALLBACK,
+                LearningObservationOrigin
+                .UNKNOWN,
+            ),
+        )
+
+    def test_raw_text_only_suggestion_is_not_promoted(
+        self,
+    ) -> None:
+        observations = tuple(
+            self.observation(
+                "Emerging Tool",
+                reference_id=f"remote-{index}",
+                origin=(
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                ),
+            )
+            for index in range(3)
+        )
+
+        self.assertEqual(
+            self.detector.detect(
+                observations
+            ),
+            (),
+        )   
+    def test_job_analyzer_suggestion_is_promoted(
+        self,
+    ) -> None:
+        observations = tuple(
+            self.observation(
+                "FinOps",
+                reference_id=f"ft-{index}",
+                origin=(
+                    LearningObservationOrigin
+                    .JOB_ANALYZER
+                ),
+            )
+            for index in range(3)
+        )
+
+        suggestions = self.detector.detect(
+            observations
+        )
+
+        self.assertEqual(
+            len(suggestions),
+            1,
+        )
+
+        self.assertEqual(
+            suggestions[0].normalized_term,
+            "finops",
+        )
+
+    def test_mixed_origin_suggestion_is_promoted(
+        self,
+    ) -> None:
+        observations = (
+            self.observation(
+                "FinOps",
+                reference_id="ft-1",
+                origin=(
+                    LearningObservationOrigin
+                    .JOB_ANALYZER
+                ),
+            ),
+            self.observation(
+                "FinOps",
+                reference_id="remote-1",
+                origin=(
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                ),
+            ),
+            self.observation(
+                "FinOps",
+                reference_id="remote-2",
+                origin=(
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                ),
+            ),
+        )
+
+        suggestions = self.detector.detect(
+            observations
+        )
+
+        self.assertEqual(
+            len(suggestions),
+            1,
+        )
+
+        self.assertEqual(
+            suggestions[0].origins,
+            (
+                LearningObservationOrigin
+                .JOB_ANALYZER,
+                LearningObservationOrigin
+                .RAW_TEXT_FALLBACK,
+            ),
+        )
+
+    def test_raw_text_only_can_be_enabled_explicitly(
+        self,
+    ) -> None:
+        detector = LearningSuggestionDetector(
+            minimum_occurrences=3,
+            allow_raw_text_only=True,
+        )
+
+        observations = tuple(
+            self.observation(
+                "Emerging Tool",
+                reference_id=f"remote-{index}",
+                origin=(
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                ),
+            )
+            for index in range(3)
+        )
+
+        suggestions = detector.detect(
+            observations
+        )
+
+        self.assertEqual(
+            len(suggestions),
+            1,
+        )
 
 if __name__ == "__main__":
     unittest.main()

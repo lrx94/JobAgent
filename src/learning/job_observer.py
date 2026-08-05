@@ -5,7 +5,9 @@ from collections.abc import Iterable
 
 from src.domain import Job
 from src.learning.models import LearningObservation
-
+from src.learning.origin import (
+    LearningObservationOrigin,
+)
 
 class JobLearningObservationExtractor:
     """
@@ -139,6 +141,7 @@ class JobLearningObservationExtractor:
                 source=source,
                 reference_id=reference_id,
                 context=job.title,
+                origin=LearningObservationOrigin.JOB_ANALYZER
             )
 
         text = "\n".join(
@@ -169,6 +172,7 @@ class JobLearningObservationExtractor:
                 source=source,
                 reference_id=reference_id,
                 context=context,
+                origin=LearningObservationOrigin.RAW_TEXT_FALLBACK
             )
 
         return tuple(observations)
@@ -225,6 +229,7 @@ class JobLearningObservationExtractor:
         source: str,
         reference_id: str,
         context: str,
+        origin: LearningObservationOrigin,
     ) -> None:
         cleaned = " ".join(
             str(term or "").split()
@@ -246,6 +251,7 @@ class JobLearningObservationExtractor:
                 source=source,
                 reference_id=reference_id,
                 context=context,
+                origin=origin,
             )
         )
 

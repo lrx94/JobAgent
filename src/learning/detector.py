@@ -11,8 +11,9 @@ from src.learning.models import (
     LearningSuggestion,
     SuggestionType,
 )
-
-
+from src.learning.origin import (
+    LearningObservationOrigin,
+)
 class LearningSuggestionDetector:
     """
     Agrège des termes observés et propose uniquement
@@ -24,6 +25,67 @@ class LearningSuggestionDetector:
     - du Market Analyzer ;
     - d'un futur extracteur de termes candidats.
     """
+    BLOCKED_PHRASES = {
+        "description du poste",
+        "profil recherche",
+        "companies can search",
+        "avoid spam applicants",
+        "mention the word",
+        "and tag",
+        "un cet",
+        "une mutuelle sante",
+        "cheques cadeaux",
+    }
+
+    BLOCKED_FRAGMENTS = {
+        "spam applicants",
+        "companies can",
+        "mention the word",
+        "and tag",
+        "mutuelle",
+        "cheques cadeaux",
+        "epargne a",
+        "indemnite",
+    }
+
+    INCOMPLETE_ENDINGS = {
+        "d",
+        "l",
+        "de",
+        "du",
+        "des",
+        "and",
+        "of",
+        "the",
+    }
+
+    URL_PATTERN = re.compile(
+        r"""
+        (
+            https?://
+            |
+            www\.
+            |
+            \b
+            [a-z0-9.-]+
+            \.
+            (?:com|fr|io|org|net|ai)
+            \b
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    RANDOM_TOKEN_PATTERN = re.compile(
+        r"""
+        \b
+        (?=[A-Za-z0-9]*[A-Za-z])
+        (?=[A-Za-z0-9]*[0-9])
+        [A-Za-z0-9]{16,}
+        \b
+        """,
+        re.VERBOSE,
+    )
 
     def __init__(
         self,
@@ -32,7 +94,9 @@ class LearningSuggestionDetector:
         minimum_occurrences: int = 3,
         minimum_sources: int = 1,
         maximum_contexts: int = 5,
+        allow_raw_text_only: bool = False,
     ) -> None:
+
         self.known_terms = {
             self.normalize_term(value)
             for value in known_terms
@@ -52,6 +116,9 @@ class LearningSuggestionDetector:
         self.maximum_contexts = max(
             1,
             int(maximum_contexts),
+        )
+        self.allow_raw_text_only = bool(
+            allow_raw_text_only
         )
 
     def detect(
@@ -82,6 +149,12 @@ class LearningSuggestionDetector:
             )
 
             if not normalized:
+                continue
+
+            if not self._is_quality_candidate(
+                raw_term=observation.term,
+                normalized_term=normalized,
+            ):
                 continue
 
             if normalized in self.known_terms:
@@ -119,6 +192,27 @@ class LearningSuggestionDetector:
                 < self.minimum_sources
             ):
                 continue
+            origins = tuple(
+                sorted(
+                    {
+                        item.origin
+                        for item in items
+                    },
+                    key=lambda origin: (
+                        origin.value
+                    ),
+                )
+            )
+
+            if (
+                not self.allow_raw_text_only
+                and set(origins)
+                == {
+                    LearningObservationOrigin
+                    .RAW_TEXT_FALLBACK
+                }
+            ):
+                continue
 
             contexts = self._contexts(items)
 
@@ -141,16 +235,11 @@ class LearningSuggestionDetector:
                     sources=tuple(sources),
                     contexts=contexts,
                     confidence=self._confidence(
-                        occurrence_count=(
-                            len(items)
-                        ),
-                        source_count=(
-                            len(sources)
-                        ),
-                        context_count=(
-                            len(contexts)
-                        ),
+                        occurrence_count=len(items),
+                        source_count=len(sources),
+                        context_count=len(contexts),
                     ),
+                    origins=origins,
                 )
             )
 
@@ -186,7 +275,67 @@ class LearningSuggestionDetector:
             maximum_contexts=(
                 self.maximum_contexts
             ),
+            allow_raw_text_only=(
+                self.allow_raw_text_only
+            ),
         )
+
+    @classmethod
+    def _is_quality_candidate(
+        cls,
+        *,
+        raw_term: str,
+        normalized_term: str,
+    ) -> bool:
+        raw_value = " ".join(
+            str(raw_term or "").split()
+        )
+
+        normalized_value = " ".join(
+            str(normalized_term or "").split()
+        )
+
+        if not raw_value or not normalized_value:
+            return False
+
+        if normalized_value in cls.BLOCKED_PHRASES:
+            return False
+
+        if any(
+            fragment in normalized_value
+            for fragment in cls.BLOCKED_FRAGMENTS
+        ):
+            return False
+
+        words = normalized_value.split()
+
+        if len(words) > 4:
+            return False
+
+        if words[-1] in cls.INCOMPLETE_ENDINGS:
+            return False
+
+        if any(
+            marker in raw_value
+            for marker in (
+                "€",
+                "%",
+                "$",
+            )
+        ):
+            return False
+
+        if cls.URL_PATTERN.search(
+            raw_value
+        ):
+            return False
+
+        if cls.RANDOM_TOKEN_PATTERN.search(
+            raw_value
+        ):
+            return False
+
+        return True
 
     def _contexts(
         self,

@@ -9,7 +9,9 @@ from src.learning.models import (
     SuggestionStatus,
     SuggestionType,
 )
-
+from src.learning.origin import (
+    LearningObservationOrigin,
+)
 
 class LearningSuggestionRepository:
     """
@@ -223,6 +225,17 @@ class LearningSuggestionRepository:
                 or current.canonical_target
             ),
             status=preserved_status,
+            origins=tuple(
+                sorted(
+                    {
+                        *previous.origins,
+                        *current.origins,
+                    },
+                    key=lambda origin: (
+                        origin.value
+                    ),
+                )
+            ),
         )
 
     def _read_payload(
@@ -330,6 +343,10 @@ class LearningSuggestionRepository:
                 suggestion.canonical_target
             ),
             "status": suggestion.status.value,
+            "origins": [
+                origin.value
+                for origin in suggestion.origins
+            ],
         }
 
     @staticmethod
@@ -387,5 +404,20 @@ class LearningSuggestionRepository:
                     "status",
                     SuggestionStatus.CANDIDATE.value,
                 )
+            ),
+            origins=tuple(
+                LearningObservationOrigin(
+                    value
+                )
+                for value in payload.get(
+                    "origins",
+                    (),
+                )
+                if value
+                in {
+                    origin.value
+                    for origin
+                    in LearningObservationOrigin
+                }
             ),
         )
