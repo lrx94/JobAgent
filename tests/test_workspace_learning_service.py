@@ -309,7 +309,37 @@ class TestWorkspaceLearningService(
                     learning_service
                 ),
             )
+def test_accept_updates_listed_suggestion_status(
+            self,
+        ) -> None:
+            suggestions = self.service.analyze_jobs(
+                self.jobs
+            ).stored
 
+            candidate = next(
+                item
+                for item in suggestions
+                if item.status
+                == SuggestionStatus.CANDIDATE
+            )
+
+            self.service.accept(
+                candidate.suggestion_id
+            )
+
+            reloaded = self.service.list_suggestions()
+
+            updated = next(
+                item
+                for item in reloaded
+                if item.suggestion_id
+                == candidate.suggestion_id
+            )
+
+            self.assertEqual(
+                updated.status,
+                SuggestionStatus.ACCEPTED,
+            )
 
 if __name__ == "__main__":
     unittest.main()

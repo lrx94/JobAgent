@@ -76,10 +76,15 @@ class JobLearningObservationExtractor:
         analyzer: JobAnalyzer | None = None,
         stop_terms: Iterable[str] = (),
         context_radius: int = 90,
+        raw_text_fallback_enabled: bool = False,
     ) -> None:
         self.analyzer = (
             analyzer
             or JobAnalyzer()
+        )
+
+        self.raw_text_fallback_enabled = bool(
+            raw_text_fallback_enabled
         )
 
         self.stop_terms = {
@@ -140,12 +145,11 @@ class JobLearningObservationExtractor:
         analysis = self.analyzer.analyze_job(
             job
         )
-
+        
         structured_terms_list: list[str] = []
         structured_terms_seen: set[str] = set()
 
         for term in (
-            *(job.skills or ()),
             *analysis.hard_skills,
             *analysis.certifications,
         ):
@@ -178,8 +182,12 @@ class JobLearningObservationExtractor:
                 context=job.title,
             )
 
+        
         # Le texte brut n'est utilisé qu'en dernier recours.
-        if not structured_terms:
+        if (
+            not structured_terms
+            and self.raw_text_fallback_enabled
+        ):
             text = "\n".join(
                 value
                 for value in (

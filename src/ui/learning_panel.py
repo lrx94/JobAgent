@@ -12,13 +12,17 @@ from src.learning import (
 from src.workspace.learning_service import (
     WorkspaceLearningService,
 )
-
+from collections.abc import (
+    Callable,
+    Iterable,
+)
 
 def render_learning_panel(
     *,
     learning_service: WorkspaceLearningService,
     suggestions: Iterable[LearningSuggestion],
     key_prefix: str = "learning",
+    on_action_success: Callable[[], None] | None = None,
 ) -> None:
     if not isinstance(
         learning_service,
@@ -69,6 +73,7 @@ def _render_suggestion(
     learning_service: WorkspaceLearningService,
     suggestion: LearningSuggestion,
     key_prefix: str,
+    on_action_success: Callable[[], None] | None = None,
 ) -> None:
     label = (
         suggestion.observed_term
@@ -145,6 +150,7 @@ def _render_suggestion(
                 learning_service.accept,
                 suggestion.suggestion_id,
                 "Suggestion acceptée.",
+                on_action_success=on_action_success,
             )
 
         if ignored:
@@ -152,6 +158,7 @@ def _render_suggestion(
                 learning_service.ignore,
                 suggestion.suggestion_id,
                 "Suggestion ignorée.",
+                on_action_success=on_action_success,
             )
 
         if rejected:
@@ -159,6 +166,7 @@ def _render_suggestion(
                 learning_service.reject,
                 suggestion.suggestion_id,
                 "Suggestion rejetée.",
+                on_action_success=on_action_success,
             )
 
 
@@ -166,6 +174,7 @@ def _apply_action(
     action: Any,
     suggestion_id: str,
     success_message: str,
+    on_action_success: Callable[[], None] | None = None,
 ) -> None:
     try:
         action(suggestion_id)
@@ -175,6 +184,11 @@ def _apply_action(
             f"la suggestion : {error}"
         )
         return
+    if on_action_success is not None:
+            on_action_success()
+            
+    st.session_state[
+        "learning_action_success"
+    ] = success_message
 
-    st.success(success_message)
     st.rerun()

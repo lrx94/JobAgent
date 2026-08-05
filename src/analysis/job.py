@@ -97,10 +97,24 @@ class JobAnalyzer(
             .extract_labels(text)
         )
 
+        provider_skill_text = " ".join(
+            str(value or "")
+            for value in (
+                job.skills
+                or ()
+            )
+        )
+
+        validated_provider_skills = (
+            self.skill_extractor.extract(
+                provider_skill_text
+            )
+        )
+
         hard_skills = self._merge_skills(
             concept_skills,
             extracted_skills,
-            job.skills,
+            validated_provider_skills,
         )
 
         experience = self._extract_experience(

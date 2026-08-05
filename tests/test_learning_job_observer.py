@@ -52,14 +52,22 @@ class TestJobLearningObservationExtractor(
         }
 
         self.assertIn(
-            "Microsoft Fabric",
-            terms,
+            "microsoft fabric",
+            {
+                term.casefold()
+                for term in terms
+            },
         )
 
         self.assertIn(
-            "FinOps",
-            terms,
+            "azure",
+            {
+                term.casefold()
+                for term in terms
+            },
         )
+
+        
 
     def test_keeps_source_and_reference(
         self,
@@ -230,7 +238,8 @@ class TestJobLearningObservationExtractor(
 
         extractor = (
             JobLearningObservationExtractor(
-                analyzer=analyzer
+                analyzer=analyzer,
+                raw_text_fallback_enabled=True,
             )
         )
 
@@ -256,7 +265,90 @@ class TestJobLearningObservationExtractor(
             "Kubernetes",
             terms,
         )
+        
+def test_raw_text_fallback_is_disabled_by_default(
+        self,
+    ) -> None:
+        analyzer = Mock()
 
+        analyzer.analyze_job.return_value = (
+            StructuredAnalysis()
+        )
+
+        extractor = (
+            JobLearningObservationExtractor(
+                analyzer=analyzer
+            )
+        )
+
+        job = Job(
+            title="Expert Kubernetes",
+            company="Example",
+            location="Remote",
+            description=(
+                "Une mutuelle santé, un CET, "
+                "des chèques cadeaux et une "
+                "épargne à 5 %."
+            ),
+            source="RemoteOK",
+            external_id="remote-no-fallback-1",
+        )
+
+        observations = extractor.extract_job(
+            job
+        )
+
+        self.assertEqual(
+            observations,
+            (),
+        )
+
+        analyzer.analyze_job.assert_called_once_with(
+            job
+        )
+
+def test_ignores_unrecognized_provider_tags(
+        self,
+    ) -> None:
+        job = Job(
+            title="Software Engineer",
+            company="Example",
+            location="Remote",
+            description="Python et Azure requis.",
+            source="RemoteOK",
+            external_id="remote-tags-1",
+            skills=[
+                "exec",
+                "digital nomad",
+                "customer support",
+                "python",
+                "azure",
+            ],
+        )
+
+        observations = (
+            self.extractor.extract_job(
+                job
+            )
+        )
+
+        terms = {
+            item.term.casefold()
+            for item in observations
+        }
+
+        self.assertIn("python", terms)
+        self.assertIn("azure", terms)
+
+        self.assertNotIn("exec", terms)
+        self.assertNotIn(
+            "digital nomad",
+            terms,
+        )
+        self.assertNotIn(
+            "customer support",
+            terms,
+        )
 
 if __name__ == "__main__":
     unittest.main()
