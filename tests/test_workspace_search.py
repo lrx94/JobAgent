@@ -31,6 +31,7 @@ class FakeCareerSearchWorkflow:
 
     def __init__(self) -> None:
         self.profiles: list[Profile] = []
+        self.selected_roles = []
 
     def search(
         self,
@@ -38,6 +39,7 @@ class FakeCareerSearchWorkflow:
         selected_role=None,
     ) -> CareerSearchResult:
         self.profiles.append(profile)
+        self.selected_roles.append(selected_role)
 
         return CareerSearchResult(
             jobs=[
@@ -106,6 +108,7 @@ class TestWorkspaceSearchService(
     def create_profile(
         self,
         profile_id: str = "data_engineer",
+        career: dict | None = None,
     ) -> None:
         directory = (
             self.workspace
@@ -133,6 +136,11 @@ class TestWorkspaceSearchService(
                     ],
                     "salary_min": 65000,
                     "remote": True,
+                    **(
+                        {"career": career}
+                        if career is not None
+                        else {}
+                    ),
                 }
             ),
             encoding="utf-8",
@@ -208,6 +216,42 @@ class TestWorkspaceSearchService(
             .name,
             "Data Engineer",
         )
+
+        self.assertIsNone(self.workflow.selected_roles[0])
+
+    def test_search_preserves_selected_role_metadata(self):
+        self.create_profile(
+            career={
+                "selected_role_id": "data_engineer",
+            }
+        )
+
+        self.service.search("data_engineer")
+
+        selected_role = self.workflow.selected_roles[0]
+        self.assertIsNotNone(selected_role)
+        self.assertEqual(selected_role.role_id, "data_engineer")
+        self.assertEqual(selected_role.label, "Data Engineer")
+        self.assertIn("RemoteOK", selected_role.preferred_providers)
+
+    def test_transitional_role_metadata_is_supported(self):
+        self.create_profile(
+            career={"selected_role": {"role_id": "data_engineer"}}
+        )
+
+        self.service.search("data_engineer")
+
+        self.assertEqual(
+            self.workflow.selected_roles[0].role_id,
+            "data_engineer",
+        )
+
+    def test_unknown_role_id_is_ignored(self):
+        self.create_profile(career={"selected_role_id": "obsolete_role"})
+
+        self.service.search("data_engineer")
+
+        self.assertIsNone(self.workflow.selected_roles[0])
 
     def test_unknown_profile_is_rejected(
         self,

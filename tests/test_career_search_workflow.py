@@ -251,6 +251,79 @@ class TestCareerSearchWorkflow(
             provider_ids,
         )
 
+    def test_semantic_evidence_contributes_to_relevance(self):
+        job = Job(
+            title="Technology Lead",
+            company="Example",
+            location="Remote",
+            description="Delivery",
+            source="Test",
+            score=60,
+            matched_skills=["pmp"],
+            match_details={
+                "semantic_matches": [
+                    {
+                        "profile_skill": "azure",
+                        "job_skill": "aws",
+                        "reason": "same_category",
+                    }
+                ]
+            },
+            remote=True,
+        )
+
+        result = CareerSearchWorkflow(
+            job_service=FakeJobService([job]),
+        ).search(
+            profile=self.create_profile(),
+            selected_role=self.create_role(),
+        )
+
+        self.assertEqual(result.jobs, [job])
+        diagnostic = result.filter_diagnostics.jobs[0]
+        self.assertEqual(diagnostic.exact_match_count, 1)
+        self.assertEqual(diagnostic.semantic_match_count, 1)
+        self.assertTrue(diagnostic.accepted)
+        self.assertIsNone(diagnostic.rejection_reason)
+
+    def test_collected_but_zero_relevant_is_diagnosed(self):
+        zero_score = Job(
+            title="Finance Assistant",
+            company="Example",
+            location="Paris",
+            description="Finance",
+            source="Test",
+            score=0,
+        )
+        insufficient = Job(
+            title="Demand Generation Manager",
+            company="Example",
+            location="Remote",
+            description="Marketing SQL",
+            source="Test",
+            score=55,
+            matched_skills=["sql"],
+        )
+
+        result = CareerSearchWorkflow(
+            job_service=FakeJobService([zero_score, insufficient]),
+        ).search(
+            profile=self.create_profile(),
+            selected_role=self.create_role(),
+        )
+
+        self.assertEqual(result.total_collected, 2)
+        self.assertEqual(result.total_relevant, 0)
+        self.assertEqual(result.filter_diagnostics.total_processed, 2)
+        self.assertEqual(result.filter_diagnostics.total_rejected, 2)
+        self.assertEqual(
+            result.filter_diagnostics.rejection_reasons,
+            {
+                "zero_score": 1,
+                "insufficient_relevance_evidence": 1,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

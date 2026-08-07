@@ -156,7 +156,7 @@ def test_does_not_merge_new_skill_after_comma() -> None:
     ]
 
 
-def test_extracts_finance_skills() -> None:
+def test_reconstructs_wrapped_finance_lines() -> None:
     extractor = SkillExtractor()
 
     text = """
@@ -168,21 +168,17 @@ def test_extracts_finance_skills() -> None:
     indicateurs de performance, SAP et MS Office.
     """
 
-    skills = set(
-        extractor.extract(text)
-    )
-
-    assert {
-        "pilotage budgétaire",
-        "contrôle de gestion",
-        "reporting financier",
-        "analyse financière",
-        "trésorerie",
-        "gestion de la masse salariale",
-        "indicateurs de performance",
-        "sap",
-        "microsoft office",
-    }.issubset(skills)
+    assert extractor.extract(text) == [
+        (
+            "Directeur financier spécialisé dans le pilotage "
+            "budgétaire, le contrôle de gestion, le reporting "
+            "financier et l'analyse financière."
+        ),
+        (
+            "Suivi de la trésorerie, pilotage de la masse salariale, "
+            "indicateurs de performance, SAP et MS Office."
+        ),
+    ]
 if __name__ == "__main__":
     test_extract_empty_text()
     test_clean_lines()

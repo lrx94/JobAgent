@@ -23,6 +23,52 @@ from src.providers.provider_selector import (
     ProviderSelector,
 )
 
+
+@dataclass(frozen=True, slots=True)
+class JobFilterDiagnostic:
+    """Décision explicable prise par le filtre Career pour une offre."""
+
+    job_identity: str
+    score: int
+    exact_match_count: int
+    semantic_match_count: int
+    title_match: bool
+    accepted: bool
+    rejection_reason: str | None = None
+
+
+@dataclass(slots=True)
+class CareerFilterDiagnostics:
+    """Diagnostics individuels et agrégés d'un filtrage Career."""
+
+    jobs: list[JobFilterDiagnostic] = field(default_factory=list)
+
+    @property
+    def total_processed(self) -> int:
+        return len(self.jobs)
+
+    @property
+    def total_accepted(self) -> int:
+        return sum(item.accepted for item in self.jobs)
+
+    @property
+    def total_rejected(self) -> int:
+        return self.total_processed - self.total_accepted
+
+    @property
+    def rejection_reasons(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+
+        for item in self.jobs:
+            if item.rejection_reason is None:
+                continue
+
+            counts[item.rejection_reason] = (
+                counts.get(item.rejection_reason, 0) + 1
+            )
+
+        return counts
+
 @dataclass(slots=True)
 class CareerSearchResult:
     """
@@ -50,6 +96,9 @@ class CareerSearchResult:
     )
     provider_errors: list[str] = field(
         default_factory=list
+    )
+    filter_diagnostics: CareerFilterDiagnostics = field(
+        default_factory=CareerFilterDiagnostics
     )
 
     @property
@@ -165,9 +214,11 @@ class CareerSearchWorkflow:
             selected_role
         )
 
-        relevant_jobs = self.filter_jobs(
+        relevant_jobs, filter_diagnostics = (
+            self._filter_jobs_with_diagnostics(
             jobs=jobs,
             role_terms=role_terms,
+            )
         )
 
         return CareerSearchResult(
@@ -185,6 +236,7 @@ class CareerSearchWorkflow:
                 .provider_errors
             ),
             provider_selection=provider_selection,
+            filter_diagnostics=filter_diagnostics,
         )
 
     def filter_jobs(
@@ -192,7 +244,19 @@ class CareerSearchWorkflow:
         jobs: list[Job],
         role_terms: list[str],
     ) -> list[Job]:
+        relevant_jobs, _ = self._filter_jobs_with_diagnostics(
+            jobs=jobs,
+            role_terms=role_terms,
+        )
+        return relevant_jobs
+
+    def _filter_jobs_with_diagnostics(
+        self,
+        jobs: list[Job],
+        role_terms: list[str],
+    ) -> tuple[list[Job], CareerFilterDiagnostics]:
         relevant_jobs: list[Job] = []
+        diagnostics = CareerFilterDiagnostics()
 
         for job in jobs:
             matched_skills = (
@@ -213,18 +277,32 @@ class CareerSearchWorkflow:
                 for term in role_terms
             )
 
+            semantic_match_count = self._semantic_match_count(job)
             enough_skills = (
-                len(matched_skills)
+                len(matched_skills) + semantic_match_count
                 >= self.minimum_skill_matches
             )
+            accepted = job.score > 0 and (title_match or enough_skills)
 
-            if (
-                job.score > 0
-                and (
-                    title_match
-                    or enough_skills
+            rejection_reason = None
+            if job.score <= 0:
+                rejection_reason = "zero_score"
+            elif not accepted:
+                rejection_reason = "insufficient_relevance_evidence"
+
+            diagnostics.jobs.append(
+                JobFilterDiagnostic(
+                    job_identity=str(job.identity),
+                    score=int(job.score),
+                    exact_match_count=len(matched_skills),
+                    semantic_match_count=semantic_match_count,
+                    title_match=title_match,
+                    accepted=accepted,
+                    rejection_reason=rejection_reason,
                 )
-            ):
+            )
+
+            if accepted:
                 relevant_jobs.append(
                     job
                 )
@@ -234,7 +312,13 @@ class CareerSearchWorkflow:
             reverse=True,
         )
 
-        return relevant_jobs
+        return relevant_jobs, diagnostics
+
+    @staticmethod
+    def _semantic_match_count(job: Job) -> int:
+        details = getattr(job, "match_details", {}) or {}
+        semantic_matches = details.get("semantic_matches", [])
+        return len(semantic_matches) if isinstance(semantic_matches, list) else 0
 
     @staticmethod
     def role_terms(
