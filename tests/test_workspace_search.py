@@ -271,6 +271,43 @@ class TestWorkspaceSearchService(
         ):
             self.service.search("")
 
+    def test_empty_user_profile_list_is_safe(self):
+        self.assertEqual(
+            self.service.list_profile_ids(),
+            [],
+        )
+
+    def test_profiles_are_isolated_between_users(self):
+        self.create_profile("private_profile")
+
+        other_context = UserContext(
+            current_user=CurrentUser(
+                user_id="other-user",
+                subject="other-subject",
+                email="other@example.com",
+                display_name="Other",
+                authenticated=True,
+                authorized=True,
+                roles=(Role.USER,),
+            )
+        )
+        other_workspace = build_workspace(
+            user_context=other_context,
+            storage_root=self.storage_root,
+        )
+        other_service = WorkspaceSearchService(
+            profile_service=other_workspace.profile_service,
+            workflow=FakeCareerSearchWorkflow(),
+        )
+
+        self.assertEqual(
+            other_service.list_profile_ids(),
+            [],
+        )
+
+        with self.assertRaises(WorkspaceSearchError):
+            other_service.build_context("private_profile")
+
     def test_cache_is_scoped_by_profile(
         self,
     ):
