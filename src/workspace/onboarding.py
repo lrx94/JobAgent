@@ -347,6 +347,7 @@ class WorkspaceOnboardingService:
             CVService.DUPLICATE_REUSE
         ),
         analyze: bool = True,
+        selected_role: RoleSuggestion | None = None,
     ) -> WorkspaceOnboardingResult:
         """
         Crée un profil de recherche à partir d'un PDF
@@ -373,7 +374,12 @@ class WorkspaceOnboardingService:
         try:
             profile_result = (
                 self.profile_service.create_profile(
-                    profile=profile
+                    profile=profile,
+                    metadata=(
+                        {"selected_role_id": selected_role.role_id}
+                        if selected_role is not None
+                        else None
+                    ),
                 )
             )
 
@@ -431,6 +437,7 @@ class WorkspaceOnboardingService:
             CVService.DUPLICATE_REUSE
         ),
         analyze: bool = True,
+        selected_role: RoleSuggestion | None = None,
     ) -> WorkspaceOnboardingResult:
         reader = getattr(
             stream,
@@ -457,6 +464,7 @@ class WorkspaceOnboardingService:
             cv_title=cv_title,
             duplicate_policy=duplicate_policy,
             analyze=analyze,
+            selected_role=selected_role,
         )
 
     @staticmethod

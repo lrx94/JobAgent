@@ -7,6 +7,8 @@ from src.career.search_workflow import (
     CareerSearchResult,
     CareerSearchWorkflow,
 )
+from src.career.models import RoleSuggestion
+from src.career.job_role_catalog import JOB_ROLE_CATALOG
 from src.career.user_cv_profile_service import (
     UserCVProfileService,
 )
@@ -34,6 +36,7 @@ class WorkspaceSearchContext:
 
     profile_id: str
     profile: Profile
+    selected_role: RoleSuggestion | None = None
 
 
 class WorkspaceSearchService:
@@ -135,6 +138,7 @@ class WorkspaceSearchService:
         return WorkspaceSearchContext(
             profile_id=normalized_profile_id,
             profile=profile,
+            selected_role=self._build_selected_role(config),
         )
 
     def search(
@@ -148,7 +152,7 @@ class WorkspaceSearchService:
         try:
             return self.workflow.search(
                 profile=context.profile,
-                selected_role=None,
+                selected_role=context.selected_role,
             )
         except Exception as error:
             raise WorkspaceSearchError(
@@ -217,6 +221,37 @@ class WorkspaceSearchService:
             ),
             remote=remote,
         )
+
+    @staticmethod
+    def _build_selected_role(
+        config: dict[str, Any],
+    ) -> RoleSuggestion | None:
+        """Relit le rôle depuis les metadata, sans invalider les anciens profils."""
+
+        career = config.get("career", {})
+        if not isinstance(career, dict):
+            return None
+
+        role_id = str(career.get("selected_role_id", "")).strip()
+
+        # Lecture tolérante de la forme transitoire produite pendant ce sprint.
+        if not role_id:
+            legacy_value = career.get("selected_role")
+            if isinstance(legacy_value, dict):
+                role_id = str(legacy_value.get("role_id", "")).strip()
+
+        for role in JOB_ROLE_CATALOG:
+            if role.role_id != role_id:
+                continue
+
+            return RoleSuggestion(
+                role_id=role.role_id,
+                label=role.label,
+                score=0.0,
+                preferred_providers=role.preferred_providers,
+            )
+
+        return None
 
     @staticmethod
     def _normalize_string_list(

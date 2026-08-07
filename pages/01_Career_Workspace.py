@@ -556,6 +556,11 @@ def render_profile_from_cv_creation() -> None:
                         uploaded_file.name
                     ),
                     profile=profile,
+                    selected_role=(
+                        preview.selected_role
+                        if preview is not None
+                        else None
+                    ),
                     cv_title=(
                         cv_title.strip()
                         or Path(

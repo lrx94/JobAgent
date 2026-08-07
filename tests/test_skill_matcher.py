@@ -97,6 +97,58 @@ def test_matching_tolerates_missing_accents() -> None:
     assert missing == []
 
 
+def test_finance_pilotage_budgetaire_alias() -> None:
+    matcher = SkillMatcher()
+
+    matched, semantic, missing = matcher.match(
+        ["pilotage budgétaire"],
+        "Responsable du pilotage du budget annuel.",
+    )
+
+    assert matched == ["pilotage budgétaire"]
+    assert semantic == []
+    assert missing == []
+
+
+def test_finance_controle_de_gestion_alias() -> None:
+    matcher = SkillMatcher()
+
+    matched, semantic, missing = matcher.match(
+        ["contrôle de gestion"],
+        "Animation du dialogue de gestion.",
+    )
+
+    assert matched == ["contrôle de gestion"]
+    assert semantic == []
+    assert missing == []
+
+
+def test_finance_tresorerie_alias_without_accents() -> None:
+    matcher = SkillMatcher()
+
+    matched, semantic, missing = matcher.match(
+        ["trésorerie"],
+        "Mission de suivi de tresorerie.",
+    )
+
+    assert matched == ["trésorerie"]
+    assert semantic == []
+    assert missing == []
+
+
+def test_finance_short_alias_does_not_match_substring() -> None:
+    matcher = SkillMatcher()
+
+    matched, semantic, missing = matcher.match(
+        ["sap"],
+        "Gestion durable des sapins de Noël.",
+    )
+
+    assert matched == []
+    assert semantic == []
+    assert missing == ["sap"]
+
+
 def test_one_job_skill_is_not_used_twice() -> None:
     matcher = SkillMatcher()
 

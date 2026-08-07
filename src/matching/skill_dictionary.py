@@ -1,9 +1,10 @@
-"""
-Dictionnaire des compétences et synonymes.
-Toutes les clés sont en minuscules.
-"""
+"""Adaptateur compatible vers la connaissance partagée des compétences."""
 
-SKILL_ALIASES = {
+from __future__ import annotations
+
+from src.ai.skill_dictionary import SKILL_SYNONYMS
+
+_LEGACY_SKILL_ALIASES = {
 
     "python": [
         "python",
@@ -51,3 +52,29 @@ SKILL_ALIASES = {
         "pipeline"
     ]
 }
+
+
+def _merge_aliases() -> dict[str, list[str]]:
+    """Fusionne la source partagée et les alias historiques sans doublon."""
+
+    merged: dict[str, list[str]] = {}
+
+    for source in (SKILL_SYNONYMS, _LEGACY_SKILL_ALIASES):
+        for canonical, aliases in source.items():
+            values = merged.setdefault(canonical, [])
+            seen = {value.casefold() for value in values}
+
+            for alias in aliases:
+                normalized = str(alias).strip()
+
+                if not normalized or normalized.casefold() in seen:
+                    continue
+
+                seen.add(normalized.casefold())
+                values.append(normalized)
+
+    return merged
+
+
+# Nom historique conservé pour les imports existants.
+SKILL_ALIASES = _merge_aliases()

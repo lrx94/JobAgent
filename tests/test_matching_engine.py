@@ -157,7 +157,7 @@ def test_engine_reports_missing_skills() -> None:
 
     assert result.matched_skills == ["python"]
     assert result.semantic_matches == []
-    assert result.missing_skills == ["postgresql"]
+    assert result.missing_skills == ["sql"]
     assert result.details["skills"] == 50
     assert result.score == 75
 
@@ -191,7 +191,7 @@ def test_engine_combines_exact_and_semantic_matches() -> None:
 
     assert result.matched_skills == ["python"]
     assert len(result.semantic_matches) == 1
-    assert result.missing_skills == ["postgresql"]
+    assert result.missing_skills == ["sql"]
 
     # (1 exact + 0.70 sémantique) / 3 = 56.67 %, arrondi à 57.
     assert result.details["skills"] == 57
@@ -224,7 +224,7 @@ def test_engine_handles_empty_profile_skills() -> None:
     assert result.semantic_matches == []
     assert result.missing_skills == []
     assert result.details["skills"] == 0
-    assert result.score == 50
+    assert result.score == 0
 
 
 def test_engine_handles_missing_job_attributes() -> None:

@@ -236,6 +236,34 @@ class TestWorkspaceOnboarding(
             associations[0].is_primary
         )
 
+    def test_selected_role_uses_existing_career_metadata(self):
+        selected_role = self.create_generated_profile().selected_role
+
+        result = (
+            self.workspace
+            .onboarding_service
+            .create_from_bytes(
+                content=PDF_CONTENT,
+                original_filename="cv_dsi.pdf",
+                profile=self.create_profile(),
+                analyze=False,
+                selected_role=selected_role,
+            )
+        )
+
+        config = self.workspace.profile_service.load_profile_config(
+            result.profile_id
+        )
+
+        self.assertEqual(
+            config["career"]["selected_role_id"],
+            selected_role.role_id,
+        )
+        self.assertEqual(
+            config["career"],
+            {"selected_role_id": selected_role.role_id},
+        )
+
     def test_stream_import(
         self,
     ):
