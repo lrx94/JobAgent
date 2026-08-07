@@ -197,6 +197,55 @@ class TestStreamlitBootstrap(
             context.authorized
         )
 
+    def test_allowed_email_is_case_insensitive(self):
+        streamlit = FakeStreamlit(
+            user=self.authenticated_user(
+                email="USER@EXAMPLE.COM"
+            ),
+            allowed_emails=[
+                "user@example.com",
+            ],
+        )
+
+        context = require_streamlit_user(
+            streamlit_module=streamlit,
+            display_account_panel=False,
+        )
+
+        self.assertTrue(context.authorized)
+
+    def test_allowed_email_ignores_surrounding_spaces(self):
+        streamlit = FakeStreamlit(
+            user=self.authenticated_user(
+                email="  user@example.com  "
+            ),
+            allowed_emails=[
+                "  user@example.com  ",
+            ],
+        )
+
+        context = require_streamlit_user(
+            streamlit_module=streamlit,
+            display_account_panel=False,
+        )
+
+        self.assertTrue(context.authorized)
+
+    def test_missing_allowlist_configuration_stops_access(self):
+        streamlit = FakeStreamlit(
+            user=self.authenticated_user(),
+            allowed_emails=[],
+        )
+        streamlit.secrets = {}
+
+        with self.assertRaises(StopExecution):
+            require_streamlit_user(
+                streamlit_module=streamlit,
+                display_account_panel=False,
+            )
+
+        self.assertEqual(streamlit.stop_calls, 1)
+
     def test_unlisted_user_is_stopped(self):
         streamlit = FakeStreamlit(
             user=self.authenticated_user(
