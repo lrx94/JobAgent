@@ -26,7 +26,11 @@ class SkillExtractor:
         if not text:
             return []
 
-        normalized_text = text.casefold()
+        normalized_text = re.sub(
+            r"\s+",
+            " ",
+            text.casefold(),
+        ).strip()
         found: set[str] = set()
 
         for skill in sorted(SKILL_SYNONYMS):
@@ -38,9 +42,11 @@ class SkillExtractor:
             ]
 
             for candidate in candidates:
-                normalized_candidate = str(
-                    candidate or ""
-                ).strip().casefold()
+                normalized_candidate = re.sub(
+                    r"\s+",
+                    " ",
+                    str(candidate or "").casefold(),
+                ).strip()
 
                 if not normalized_candidate:
                     continue

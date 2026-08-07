@@ -9,7 +9,9 @@ from src.career import (
     CVProfileService,
 )
 from src.profile import Profile
-
+from src.ai.skill_extractor import (
+    SkillExtractor,
+)
 
 class FakeSkillExtractor:
 
@@ -388,7 +390,59 @@ class TestCVProfileService(unittest.TestCase):
             ),
             "daf_cfo",
         )
+    def test_analyzes_finance_cv_text(
+        self,
+    ) -> None:
 
+        service = CVProfileService(
+            profiles_directory=(
+                self.profiles_directory
+            ),
+            skill_extractor=SkillExtractor(),
+        )
+        analysis = service.analyze_text(
+            """
+            Directeur Financier - Responsable du pilotage
+            budgétaire et de la performance financière.
+
+            Contrôle de gestion, reporting financier,
+            analyse financière, suivi de la trésorerie,
+            pilotage de la masse salariale et SAP.
+            """
+        )
+
+        self.assertTrue(
+            analysis.extracted_skills
+        )
+
+        self.assertIn(
+            "pilotage budgetaire",
+            analysis.extracted_skills,
+        )
+
+        self.assertIn(
+            "controle de gestion",
+            analysis.extracted_skills,
+        )
+
+        self.assertIn(
+            "sap",
+            analysis.extracted_skills,
+        )
+
+        self.assertTrue(
+            analysis.role_suggestions
+        )
+
+        self.assertEqual(
+            analysis.role_suggestions[0].role_id,
+            "cfo",
+        )
+
+        self.assertEqual(
+            analysis.suggested_title,
+            "Direction financière / DAF / CFO",
+        )
 
 if __name__ == "__main__":
     unittest.main()
