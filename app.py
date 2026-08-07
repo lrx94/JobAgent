@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
-from src.profile_manager import ProfileManager
 from src.services.job_service import JobService
 from src.ui.dashboard import display_dashboard
 from src.ui.job_card import display_job
 from src.auth.adapters.streamlit_bootstrap import (
     require_streamlit_user,
 )
+from src.workspace import build_workspace
+from src.workspace.search import (
+    WorkspaceSearchError,
+    WorkspaceSearchService,
+)
+
+
+STORAGE_ROOT = Path("data") / "users"
 
 
 # --------------------------------------------------
@@ -49,7 +58,13 @@ def create_job_service() -> JobService:
     return JobService()
 
 
-profile_manager = ProfileManager()
+workspace = build_workspace(
+    user_context=user_context,
+    storage_root=STORAGE_ROOT,
+)
+profile_reader = WorkspaceSearchService(
+    profile_service=workspace.profile_service,
+)
 job_service = create_job_service()
 
 
@@ -57,26 +72,26 @@ job_service = create_job_service()
 # Chargement des profils
 # --------------------------------------------------
 
-profile_names = profile_manager.list_profiles()
+profile_ids = profile_reader.list_profile_ids()
 
-if not profile_names:
+if not profile_ids:
     st.error(
-        "Aucun profil valide n'a été trouvé "
-        "dans le dossier profiles."
+        "Aucun profil n'a été trouvé dans votre espace. "
+        "Créez-en un depuis Career Workspace."
     )
     st.stop()
 
-selected_profile_name = st.sidebar.selectbox(
+selected_profile_id = st.sidebar.selectbox(
     "Profil",
-    profile_names,
+    profile_ids,
 )
 
 try:
-    profile = profile_manager.load_profile(
-        selected_profile_name
-    )
+    profile = profile_reader.build_context(
+        selected_profile_id
+    ).profile
 
-except (FileNotFoundError, ValueError, OSError) as error:
+except WorkspaceSearchError as error:
     st.error(
         "Impossible de charger le profil sélectionné."
     )

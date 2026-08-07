@@ -27,14 +27,12 @@ def get_structured_details(
     sont disponibles et exploitables.
     """
 
-    if not isinstance(job, Job):
-        raise TypeError(
-            "job doit être une instance de Job."
-        )
+    _validate_job_contract(job)
 
+    match_details = getattr(job, "match_details")
     details = (
-        job.match_details.get("structured")
-        if isinstance(job.match_details, Mapping)
+        match_details.get("structured")
+        if isinstance(match_details, Mapping)
         else None
     )
 
@@ -42,6 +40,29 @@ def get_structured_details(
         return None
 
     return dict(details)
+
+
+def _validate_job_contract(job: object) -> None:
+    """Valide la frontière UI, y compris après un hot reload Streamlit."""
+
+    required_attributes = (
+        "score",
+        "match_details",
+    )
+
+    if all(
+        hasattr(job, attribute)
+        for attribute in required_attributes
+    ):
+        match_details = getattr(job, "match_details")
+
+        if isinstance(match_details, Mapping):
+            return
+
+    raise TypeError(
+        "job doit respecter le contrat Job "
+        "(score et match_details mapping)."
+    )
 
 
 def render_ai_debug(
@@ -65,7 +86,7 @@ def render_ai_debug(
     legacy_score = _safe_float(
         details.get(
             "legacy_score",
-            job.score,
+            getattr(job, "score"),
         )
     )
 

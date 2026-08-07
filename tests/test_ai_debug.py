@@ -23,6 +23,14 @@ class FakeContext:
         return False
 
 
+class ReloadCompatibleJob:
+    """Simule une instance canonique survivant à un hot reload."""
+
+    def __init__(self, match_details):
+        self.score = 72.0
+        self.match_details = match_details
+
+
 class TestAIDebug(
     unittest.TestCase
 ):
@@ -117,6 +125,29 @@ class TestAIDebug(
         self.assertEqual(
             details["global_score"],
             84.0,
+        )
+
+    def test_reload_compatible_job_without_details_is_supported(self):
+        job = ReloadCompatibleJob(
+            match_details={}
+        )
+
+        self.assertIsNone(
+            get_structured_details(job)
+        )
+
+    def test_reload_compatible_job_with_details_is_supported(self):
+        job = ReloadCompatibleJob(
+            match_details={
+                "structured": {
+                    "global_score": 84.0,
+                }
+            }
+        )
+
+        self.assertEqual(
+            get_structured_details(job),
+            {"global_score": 84.0},
         )
 
     @patch(
@@ -245,6 +276,14 @@ class TestAIDebug(
             get_structured_details(
                 object()
             )
+
+    def test_invalid_match_details_is_rejected(self):
+        job = ReloadCompatibleJob(
+            match_details=[]
+        )
+
+        with self.assertRaises(TypeError):
+            get_structured_details(job)
 
 
 if __name__ == "__main__":

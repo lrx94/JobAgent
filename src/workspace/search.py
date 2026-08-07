@@ -85,6 +85,11 @@ class WorkspaceSearchService:
     def user_id(self) -> str:
         return self.profile_service.user_id
 
+    def list_profile_ids(self) -> list[str]:
+        """Liste uniquement les profils de l'utilisateur lié au service."""
+
+        return list(self.profile_service.list_profiles())
+
     def build_context(
         self,
         profile_id: str,
