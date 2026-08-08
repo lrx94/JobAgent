@@ -37,6 +37,8 @@ class TestLearningSuggestionRepository(
     def suggestion(
         *,
         occurrence_count: int = 5,
+        profile_id: str | None = None,
+        status: SuggestionStatus = SuggestionStatus.CANDIDATE,
     ) -> LearningSuggestion:
         return LearningSuggestion(
             suggestion_id="skill-fabric",
@@ -57,6 +59,8 @@ class TestLearningSuggestionRepository(
                 "Microsoft Fabric requis.",
             ),
             confidence=0.8,
+            profile_id=profile_id,
+            status=status,
         )
 
     def test_saves_and_loads_suggestion(
@@ -149,6 +153,50 @@ class TestLearningSuggestionRepository(
                     SuggestionStatus.ACCEPTED
                 ),
             )
+
+    def test_repository_filters_and_updates_by_profile(self):
+        self.repository.save_many(
+            [
+                self.suggestion(profile_id="dsi"),
+                self.suggestion(profile_id="daf"),
+            ]
+        )
+
+        self.repository.change_status(
+            suggestion_id="skill-fabric",
+            profile_id="dsi",
+            status=SuggestionStatus.ACCEPTED,
+        )
+
+        self.assertEqual(
+            self.repository.get(
+                "skill-fabric", profile_id="dsi"
+            ).status,
+            SuggestionStatus.ACCEPTED,
+        )
+        self.assertEqual(
+            self.repository.get(
+                "skill-fabric", profile_id="daf"
+            ).status,
+            SuggestionStatus.CANDIDATE,
+        )
+
+    def test_legacy_human_decision_is_preserved_when_scoped(self):
+        self.repository.save_many(
+            [self.suggestion(status=SuggestionStatus.REJECTED)]
+        )
+        self.repository.save_many(
+            [self.suggestion(profile_id="dsi")]
+        )
+
+        scoped = self.repository.get(
+            "skill-fabric",
+            profile_id="dsi",
+        )
+        self.assertEqual(scoped.status, SuggestionStatus.REJECTED)
+        self.assertIsNone(
+            self.repository.get("skill-fabric").profile_id
+        )
 
 
 if __name__ == "__main__":

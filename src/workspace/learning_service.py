@@ -80,6 +80,7 @@ class WorkspaceLearningResult:
         ...
     ]
     summary: WorkspaceLearningSummary
+    profile_id: str | None = None
 
 
 class WorkspaceLearningService:
@@ -128,7 +129,10 @@ class WorkspaceLearningService:
     def analyze_jobs(
         self,
         jobs: Iterable[Job],
+        *,
+        profile_id: str,
     ) -> WorkspaceLearningResult:
+        normalized_profile_id = self._require_profile_id(profile_id)
         normalized_jobs = self._unique_jobs(
             jobs
         )
@@ -137,13 +141,16 @@ class WorkspaceLearningService:
             detected = (
                 self.learning_service
                 .analyze_jobs(
-                    normalized_jobs
+                    normalized_jobs,
+                    profile_id=normalized_profile_id,
                 )
             )
 
             stored = (
                 self.learning_service
-                .list_suggestions()
+                .list_suggestions(
+                    profile_id=normalized_profile_id
+                )
             )
 
         except Exception as error:
@@ -161,11 +168,32 @@ class WorkspaceLearningService:
                     stored
                 )
             ),
+            profile_id=normalized_profile_id,
+        )
+
+    def analyze_search_result(
+        self,
+        search_result: Any,
+        *,
+        profile_id: str,
+    ) -> WorkspaceLearningResult:
+        """Analyse uniquement les offres validées par la pertinence Career."""
+
+        relevant_jobs = getattr(search_result, "jobs", None)
+        if relevant_jobs is None:
+            raise WorkspaceLearningError(
+                "Le résultat Career ne fournit pas ses offres pertinentes."
+            )
+
+        return self.analyze_jobs(
+            relevant_jobs,
+            profile_id=profile_id,
         )
 
     def list_suggestions(
         self,
         *,
+        profile_id: str,
         status: SuggestionStatus | None = None,
     ) -> tuple[
         LearningSuggestion,
@@ -175,7 +203,8 @@ class WorkspaceLearningService:
             return (
                 self.learning_service
                 .list_suggestions(
-                    status=status
+                    status=status,
+                    profile_id=self._require_profile_id(profile_id),
                 )
             )
         except Exception as error:
@@ -186,28 +215,34 @@ class WorkspaceLearningService:
 
     def accept(
         self,
+        profile_id: str,
         suggestion_id: str,
     ) -> LearningSuggestion:
         return self._change_status(
             action="accept",
+            profile_id=profile_id,
             suggestion_id=suggestion_id,
         )
 
     def reject(
         self,
+        profile_id: str,
         suggestion_id: str,
     ) -> LearningSuggestion:
         return self._change_status(
             action="reject",
+            profile_id=profile_id,
             suggestion_id=suggestion_id,
         )
 
     def ignore(
         self,
+        profile_id: str,
         suggestion_id: str,
     ) -> LearningSuggestion:
         return self._change_status(
             action="ignore",
+            profile_id=profile_id,
             suggestion_id=suggestion_id,
         )
 
@@ -215,6 +250,7 @@ class WorkspaceLearningService:
         self,
         *,
         action: str,
+        profile_id: str,
         suggestion_id: str,
     ) -> LearningSuggestion:
         normalized_id = str(
@@ -239,7 +275,8 @@ class WorkspaceLearningService:
 
         try:
             return method(
-                normalized_id
+                normalized_id,
+                profile_id=self._require_profile_id(profile_id),
             )
         except Exception as error:
             raise WorkspaceLearningError(
@@ -274,6 +311,12 @@ class WorkspaceLearningService:
 
         return tuple(result)
 
-    
+    @staticmethod
+    def _require_profile_id(profile_id: str) -> str:
+        normalized = str(profile_id or "").strip()
+        if not normalized:
+            raise WorkspaceLearningError(
+                "Le profile_id Learning est obligatoire."
+            )
+        return normalized
 
-        

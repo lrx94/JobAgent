@@ -41,6 +41,7 @@ STATUS_DISPLAY = {
 def render_learning_panel(
     *,
     learning_service: WorkspaceLearningService,
+    profile_id: str,
     suggestions: Iterable[LearningSuggestion],
     key_prefix: str = "learning",
     on_action_success: Callable[[], None] | None = None,
@@ -145,6 +146,7 @@ def render_learning_panel(
             SuggestionStatus.CANDIDATE
         ],
         learning_service=learning_service,
+        profile_id=profile_id,
         key_prefix=key_prefix,
         on_action_success=on_action_success,
         expanded=True,
@@ -156,6 +158,7 @@ def render_learning_panel(
             SuggestionStatus.ACCEPTED
         ],
         learning_service=learning_service,
+        profile_id=profile_id,
         key_prefix=key_prefix,
         on_action_success=on_action_success,
         expanded=False,
@@ -167,6 +170,7 @@ def render_learning_panel(
             SuggestionStatus.REJECTED
         ],
         learning_service=learning_service,
+        profile_id=profile_id,
         key_prefix=key_prefix,
         on_action_success=on_action_success,
         expanded=False,
@@ -178,6 +182,7 @@ def render_learning_panel(
             SuggestionStatus.IGNORED
         ],
         learning_service=learning_service,
+        profile_id=profile_id,
         key_prefix=key_prefix,
         on_action_success=on_action_success,
         expanded=False,
@@ -207,6 +212,7 @@ def _render_status_section(
         ...
     ],
     learning_service: WorkspaceLearningService,
+    profile_id: str,
     key_prefix: str,
     on_action_success: Callable[[], None] | None,
     expanded: bool,
@@ -235,6 +241,7 @@ def _render_status_section(
         for suggestion in suggestions:
             _render_suggestion(
                 learning_service=learning_service,
+                profile_id=profile_id,
                 suggestion=suggestion,
                 key_prefix=key_prefix,
                 on_action_success=on_action_success,
@@ -244,6 +251,7 @@ def _render_status_section(
 def _render_suggestion(
     *,
     learning_service: WorkspaceLearningService,
+    profile_id: str,
     suggestion: LearningSuggestion,
     key_prefix: str,
     on_action_success: Callable[[], None] | None,
@@ -317,6 +325,7 @@ def _render_suggestion(
 
         _render_actions(
             learning_service=learning_service,
+            profile_id=profile_id,
             suggestion=suggestion,
             label=label,
             key_prefix=key_prefix,
@@ -327,6 +336,7 @@ def _render_suggestion(
 def _render_actions(
     *,
     learning_service: WorkspaceLearningService,
+    profile_id: str,
     suggestion: LearningSuggestion,
     label: str,
     key_prefix: str,
@@ -346,7 +356,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.accept,
+                action=lambda suggestion_id: learning_service.accept(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"✅ Suggestion « {label} » "
@@ -366,7 +378,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.ignore,
+                action=lambda suggestion_id: learning_service.ignore(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"⏸️ Suggestion « {label} » "
@@ -386,7 +400,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.reject,
+                action=lambda suggestion_id: learning_service.reject(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"❌ Suggestion « {label} » "
@@ -409,7 +425,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.reject,
+                action=lambda suggestion_id: learning_service.reject(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"❌ Suggestion « {label} » "
@@ -432,7 +450,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.accept,
+                action=lambda suggestion_id: learning_service.accept(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"✅ Suggestion « {label} » "
@@ -457,7 +477,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.accept,
+                action=lambda suggestion_id: learning_service.accept(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"✅ Suggestion « {label} » "
@@ -477,7 +499,9 @@ def _render_actions(
             width="stretch",
         ):
             _apply_action(
-                action=learning_service.reject,
+                action=lambda suggestion_id: learning_service.reject(
+                    profile_id, suggestion_id
+                ),
                 suggestion=suggestion,
                 success_message=(
                     f"❌ Suggestion « {label} » "

@@ -118,6 +118,7 @@ class LearningSuggestion:
     status: SuggestionStatus = (
         SuggestionStatus.CANDIDATE
     )
+    profile_id: str | None = None
 
     def __post_init__(self) -> None:
         suggestion_id = str(
@@ -224,6 +225,17 @@ class LearningSuggestion:
             self,
             "canonical_target",
             canonical_target,
+        )
+
+        profile_id = (
+            str(self.profile_id).strip()
+            if self.profile_id is not None
+            else None
+        )
+        object.__setattr__(
+            self,
+            "profile_id",
+            profile_id or None,
         )
 
     @staticmethod

@@ -209,6 +209,202 @@ class TestLearningSuggestionDetector(
                 [object()]
             )
 
+    def test_quality_gate_rejects_scraping_identifiers(self):
+        rejected = (
+            "and tag RMmEwMTplMGE6ZWUwOmMxMjA6NjljMDplZThjOmJiMzpjNDk1",
+            "https://example.com/jobs/123",
+            "user@example.com",
+            "550e8400-e29b-41d4-a716-446655440000",
+            "a3f80c924ecb2f3e8f45d09fe7a55c10",
+            "<span>Docker</span>",
+        )
+        for term in rejected:
+            with self.subTest(term=term):
+                observations = tuple(
+                    self.observation(term) for _ in range(3)
+                )
+                self.assertEqual(self.detector.detect(observations), ())
+
+    def test_quality_gate_preserves_legitimate_technical_skills(self):
+        for term in ("C++", "C#", ".NET", "SAP", "Power BI", "CI/CD", "Kubernetes"):
+            with self.subTest(term=term):
+                observations = tuple(
+                    self.observation(term) for _ in range(3)
+                )
+                self.assertEqual(len(self.detector.detect(observations)), 1)
+
+    def test_business_skill_can_pass_quality_gate(self):
+        observations = tuple(
+            self.observation("Pilotage financier") for _ in range(3)
+        )
+        self.assertEqual(len(self.detector.detect(observations)), 1)
+
+    def test_quality_gate_rejects_structural_and_lexical_noise(self):
+        rejected = (
+            "de la DSI",
+            "Systèmes d",
+            "Esprit d",
+            "Participer à l",
+            "Description du poste",
+            "RESPONSABILITÉS",
+            "Enfin",
+            "Directeur",
+            "Directrice des systèmes",
+            "Définir",
+            "Mettre en place",
+            "Piloter les projets",
+            "à la Direction",
+            "les équipes IT",
+        )
+
+        for term in rejected:
+            with self.subTest(term=term):
+                self.assertFalse(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_quality_gate_preserves_expected_business_concepts(self):
+        admitted = (
+            "RGPD",
+            "Cybersécurité",
+            "ERP",
+            "IA",
+            "SAP",
+            "Kubernetes",
+            "Power BI",
+            "FinOps",
+            "C++",
+            "C#",
+            ".NET",
+            "CI/CD",
+            "gestion de projet",
+            "gouvernance SI",
+            "protection des données",
+        )
+
+        for term in admitted:
+            with self.subTest(term=term):
+                self.assertTrue(
+                    self.detector.is_quality_term(term)
+                )
+                observations = tuple(
+                    self.observation(
+                        term,
+                        reference_id=f"job-{index}",
+                        context=f"Contexte métier {index}: {term}",
+                    )
+                    for index in range(3)
+                )
+                if (
+                    self.detector.normalize_term(term)
+                    not in self.detector.known_terms
+                ):
+                    self.assertEqual(
+                        len(self.detector.detect(observations)),
+                        1,
+                    )
+
+    def test_quality_gate_uses_generic_rules_not_observed_phrases(self):
+        rejected_equivalents = (
+            "du département Finance",
+            "Garantir la conformité",
+            "Responsable des opérations",
+            "Profil recherché",
+            "Architecture d",
+        )
+
+        for term in rejected_equivalents:
+            with self.subTest(term=term):
+                self.assertFalse(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_quality_gate_rejects_document_headers(self):
+        headers = (
+            "Description du profil",
+            "Description du poste",
+            "Profil recherché",
+            "Votre profil",
+            "Vos missions",
+            "Responsabilités",
+            "Missions",
+            "Compétences requises",
+            "Qualifications",
+        )
+
+        for term in headers:
+            with self.subTest(term=term):
+                self.assertFalse(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_quality_gate_rejects_incomplete_subject_fragments(self):
+        fragments = (
+            "Vous avez une",
+            "Vous êtes un",
+            "Vous êtes une",
+            "Vous disposez d'une",
+            "Vous justifiez d'une",
+            "Nous recherchons un",
+            "Il possède une",
+        )
+
+        for term in fragments:
+            with self.subTest(term=term):
+                self.assertFalse(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_incomplete_fragment_rule_preserves_complete_skills(self):
+        skills = (
+            "gestion de projet",
+            "analyse financière",
+            "protection des données",
+            "pilotage budgétaire",
+            "cybersécurité",
+            "ERP",
+            "RGPD",
+            "IA",
+            "Power BI",
+            "SAP",
+            "C++",
+            "C#",
+            ".NET",
+            "CI/CD",
+        )
+
+        for term in skills:
+            with self.subTest(term=term):
+                self.assertTrue(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_quality_gate_rejects_isolated_numbers(self):
+        for term in ("10", "000", "2025"):
+            with self.subTest(term=term):
+                self.assertFalse(
+                    self.detector.is_quality_term(term)
+                )
+
+    def test_quality_gate_preserves_structured_versioned_skills(self):
+        for term in (
+            "ISO 27001",
+            "Windows 11",
+            "Python 3",
+            "SAP S/4HANA",
+            "C++",
+            "C#",
+            ".NET",
+            "CI/CD",
+            "RGPD",
+            "ERP",
+            "Cybersécurité",
+        ):
+            with self.subTest(term=term):
+                self.assertTrue(
+                    self.detector.is_quality_term(term)
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
