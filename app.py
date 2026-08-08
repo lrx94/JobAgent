@@ -153,6 +153,50 @@ st.sidebar.write(
     else "Non"
 )
 
+with st.sidebar.expander("✏️ Modifier les contraintes", expanded=False):
+    with st.form(f"profile_constraints_{selected_profile_id}"):
+        edited_locations = st.text_input(
+            "Localisations / mobilité",
+            value=", ".join(profile.locations),
+        )
+        edited_salary = st.number_input(
+            "Salaire minimum annuel",
+            min_value=0,
+            step=1000,
+            value=int(profile.salary_min or 0),
+        )
+        edited_remote = st.checkbox(
+            "Télétravail accepté",
+            value=bool(profile.remote),
+        )
+        save_constraints = st.form_submit_button(
+            "Enregistrer les contraintes",
+            use_container_width=True,
+        )
+
+    if save_constraints:
+        try:
+            updated_context = profile_reader.update_profile_constraints(
+                profile_id=selected_profile_id,
+                locations=edited_locations.split(","),
+                salary_min=int(edited_salary),
+                remote=edited_remote,
+            )
+        except WorkspaceSearchError as error:
+            st.error(str(error))
+        else:
+            st.session_state["profile_constraints_success"] = (
+                f"Contraintes du profil {updated_context.profile.name} enregistrées."
+            )
+            st.rerun()
+
+constraints_success = st.session_state.pop(
+    "profile_constraints_success",
+    None,
+)
+if constraints_success:
+    st.sidebar.success(constraints_success)
+
 
 # --------------------------------------------------
 # Résumé de la recherche

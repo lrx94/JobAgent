@@ -396,6 +396,47 @@ class CVProfileService:
             metadata=metadata,
         )
 
+    def update_profile_constraints(
+        self,
+        *,
+        profile_id: str,
+        locations: list[str],
+        salary_min: int | None,
+        remote: bool,
+    ) -> ProfileSaveResult:
+        """Met à jour seulement les contraintes d'un profil existant."""
+
+        if isinstance(salary_min, bool):
+            raise ValueError("salary_min doit être un entier positif ou None.")
+
+        normalized_salary = 0 if salary_min is None else int(salary_min)
+        if normalized_salary < 0:
+            raise ValueError("salary_min ne peut pas être négatif.")
+
+        existing_config = self.load_profile_config(profile_id)
+        profile = Profile(
+            name=str(
+                existing_config.get("name")
+                or existing_config.get("title")
+                or profile_id
+            ).strip(),
+            keywords=self._normalize_list(
+                existing_config.get("keywords", ())
+            ),
+            locations=self._normalize_list(locations),
+            salary_min=normalized_salary,
+            remote=bool(remote),
+        )
+
+        return self._save_profile(
+            profile=profile,
+            profile_id=self.slugify(profile_id),
+            action="updated",
+            cv_source_path=None,
+            existing_config=existing_config,
+            metadata=None,
+        )
+
     def _save_profile(
         self,
         profile: Profile,

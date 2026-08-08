@@ -17,6 +17,7 @@ from src.career.search_workflow import (
 )
 from src.domain import Job
 from src.profile import Profile
+from src.search_request import SearchRequest
 from src.workspace import (
     build_workspace,
 )
@@ -308,6 +309,109 @@ class TestWorkspaceSearchService(
         with self.assertRaises(WorkspaceSearchError):
             other_service.build_context("private_profile")
 
+    def test_update_constraints_preserves_profile_business_data(self):
+        self.create_profile(
+            career={"selected_role_id": "data_engineer"}
+        )
+        config_path = (
+            self.workspace.services.paths
+            .profile_directory("data_engineer")
+            / "config.json"
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["cv"] = "cv-principal.pdf"
+        config["custom_metadata"] = {"keep": True}
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        updated = self.service.update_profile_constraints(
+            profile_id="data_engineer",
+            locations=[" Lyon ", "lyon", "Remote"],
+            salary_min=72000,
+            remote=False,
+        )
+        persisted = self.workspace.profile_service.load_profile_config(
+            "data_engineer"
+        )
+
+        self.assertEqual(updated.profile.locations, ["Lyon", "Remote"])
+        self.assertEqual(updated.profile.salary_min, 72000)
+        self.assertFalse(updated.profile.remote)
+        self.assertEqual(persisted["keywords"], ["Python", "SQL", "Azure"])
+        self.assertEqual(
+            persisted["career"],
+            {"selected_role_id": "data_engineer"},
+        )
+        self.assertEqual(persisted["cv"], "cv-principal.pdf")
+        self.assertEqual(persisted["custom_metadata"], {"keep": True})
+
+    def test_update_constraints_rejects_negative_salary(self):
+        self.create_profile()
+        with self.assertRaises(WorkspaceSearchError):
+            self.service.update_profile_constraints(
+                profile_id="data_engineer",
+                locations=["Paris"],
+                salary_min=-1,
+                remote=True,
+            )
+
+    def test_update_constraints_preserves_cv_associations(self):
+        self.create_profile()
+        imported = self.workspace.cv_service.import_bytes(
+            content=b"%PDF-1.4\nconstraints test\n%%EOF\n",
+            title="CV Data",
+            original_filename="cv.pdf",
+            analyze=False,
+        )
+        association = self.workspace.association_service.attach_cv(
+            profile_id="data_engineer",
+            cv_id=imported.cv_id,
+            is_primary=True,
+        )
+
+        self.service.update_profile_constraints(
+            profile_id="data_engineer",
+            locations=["Lyon"],
+            salary_min=70000,
+            remote=False,
+        )
+
+        self.assertEqual(
+            self.workspace.association_repository.list_for_profile(
+                "data_engineer"
+            ),
+            [association],
+        )
+
+    def test_update_constraints_remains_user_isolated(self):
+        self.create_profile("private_profile")
+        other_context = UserContext(
+            current_user=CurrentUser(
+                user_id="other-user",
+                subject="other-subject",
+                email="other@example.com",
+                display_name="Other",
+                authenticated=True,
+                authorized=True,
+                roles=(Role.USER,),
+            )
+        )
+        other_workspace = build_workspace(
+            user_context=other_context,
+            storage_root=self.storage_root,
+        )
+        other_service = WorkspaceSearchService(
+            profile_service=other_workspace.profile_service,
+            workflow=FakeCareerSearchWorkflow(),
+        )
+
+        with self.assertRaises(WorkspaceSearchError):
+            other_service.update_profile_constraints(
+                profile_id="private_profile",
+                locations=["Lyon"],
+                salary_min=50000,
+                remote=False,
+            )
+
     def test_cache_is_scoped_by_profile(
         self,
     ):
@@ -388,6 +492,51 @@ class TestWorkspaceSearchService(
             ),
             second,
         )
+
+    def test_activating_new_profile_invalidates_only_previous(self):
+        session_state: dict = {}
+        daf = CareerSearchResult()
+        dsi = CareerSearchResult()
+        other = CareerSearchResult()
+        WorkspaceSearchCache.set(session_state, "daf", daf)
+        WorkspaceSearchCache.set(session_state, "dsi", dsi)
+        WorkspaceSearchCache.set(session_state, "other", other)
+        WorkspaceSearchCache.activate_profile(session_state, "daf")
+
+        previous = WorkspaceSearchCache.activate_profile(
+            session_state,
+            "dsi",
+        )
+
+        self.assertEqual(previous, "daf")
+        self.assertIsNone(WorkspaceSearchCache.get(session_state, "daf"))
+        self.assertIs(WorkspaceSearchCache.get(session_state, "dsi"), dsi)
+        self.assertIs(WorkspaceSearchCache.get(session_state, "other"), other)
+
+    def test_updated_profile_builds_typed_search_request(self):
+        self.create_profile(career={"selected_role_id": "cio"})
+        updated = self.service.update_profile_constraints(
+            profile_id="data_engineer",
+            locations=[" Paris ", ""],
+            salary_min=70000,
+            remote=False,
+        )
+
+        request = SearchRequest.from_profile(updated.profile)
+        self.assertEqual(request.locations, ["Paris"])
+        self.assertEqual(request.salary_min, 70000)
+        self.assertIsInstance(request.salary_min, int)
+        self.assertIs(request.remote, False)
+        self.assertEqual(request.keywords, ["Python", "SQL", "Azure"])
+
+    def test_cio_role_is_restored_after_profile_reload(self):
+        self.create_profile(career={"selected_role_id": "cio"})
+
+        context = self.service.build_context("data_engineer")
+
+        self.assertIsNotNone(context.selected_role)
+        self.assertEqual(context.selected_role.role_id, "cio")
+        self.assertEqual(context.selected_role.label, "DSI / CIO")
 
 
 if __name__ == "__main__":

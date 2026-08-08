@@ -164,6 +164,31 @@ class WorkspaceSearchService:
                 "La recherche d'offres a échoué."
             ) from error
 
+    def update_profile_constraints(
+        self,
+        *,
+        profile_id: str,
+        locations: list[str],
+        salary_min: int | None,
+        remote: bool,
+    ) -> WorkspaceSearchContext:
+        """Persiste les contraintes via le service de profils utilisateur."""
+
+        self.build_context(profile_id)
+        try:
+            self.profile_service.update_profile_constraints(
+                profile_id=profile_id,
+                locations=locations,
+                salary_min=salary_min,
+                remote=remote,
+            )
+        except (TypeError, ValueError, OSError) as error:
+            raise WorkspaceSearchError(
+                "Impossible de mettre à jour les contraintes du profil."
+            ) from error
+
+        return self.build_context(profile_id)
+
     @staticmethod
     def _build_profile(
         profile_id: str,
@@ -309,6 +334,28 @@ class WorkspaceSearchCache:
     STATE_KEY = (
         "career_workspace_search_results"
     )
+    ACTIVE_PROFILE_KEY = (
+        "career_workspace_search_active_profile"
+    )
+
+    @classmethod
+    def activate_profile(
+        cls,
+        session_state: MutableMapping[str, Any],
+        profile_id: str | None,
+    ) -> str | None:
+        """Lie le cache au profil actif et invalide seulement l'ancien."""
+
+        normalized = str(profile_id or "").strip() or None
+        previous = str(
+            session_state.get(cls.ACTIVE_PROFILE_KEY) or ""
+        ).strip() or None
+
+        if previous != normalized and previous is not None:
+            cls.clear(session_state, previous)
+
+        session_state[cls.ACTIVE_PROFILE_KEY] = normalized
+        return previous
 
     @classmethod
     def get_store(
