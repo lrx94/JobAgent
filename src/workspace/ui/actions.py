@@ -1,6 +1,69 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any, MutableMapping
+
+from src.workspace.search import WorkspaceSearchCache
+
+
+def finalize_onboarding_session(
+    session_state: MutableMapping[str, Any],
+    *,
+    profile_id: str,
+    selected_profile_key: str,
+    keys_to_clear: Iterable[str],
+    generation_key: str | None = None,
+) -> None:
+    """Sélectionne le profil créé et efface tout état de soumission obsolète."""
+
+    session_state[selected_profile_key] = profile_id
+    for key in keys_to_clear:
+        session_state.pop(key, None)
+    if generation_key is not None:
+        session_state[generation_key] = int(
+            session_state.get(generation_key, 0)
+        ) + 1
+
+
+def synchronize_profile_selection(
+    session_state: MutableMapping[str, Any],
+    *,
+    profile_id: str | None,
+    learning_result_key_prefix: str,
+) -> str | None:
+    """Invalide les résultats transitoires appartenant à l'ancien profil."""
+
+    previous = WorkspaceSearchCache.activate_profile(
+        session_state,
+        profile_id,
+    )
+    normalized = str(profile_id or "").strip() or None
+    if previous is not None and previous != normalized:
+        session_state.pop(
+            f"{learning_result_key_prefix}_{previous}",
+            None,
+        )
+    return previous
+
+
+def get_profile_learning_result(
+    session_state: MutableMapping[str, Any],
+    *,
+    profile_id: str,
+    learning_result_key_prefix: str,
+) -> Any | None:
+    """Refuse un résultat Learning absent ou attribué à un autre profil."""
+
+    key = f"{learning_result_key_prefix}_{profile_id}"
+    result = session_state.get(key)
+    if result is None:
+        return None
+
+    if getattr(result, "profile_id", None) != profile_id:
+        session_state.pop(key, None)
+        return None
+
+    return result
 
 
 class WorkspaceCVActions:

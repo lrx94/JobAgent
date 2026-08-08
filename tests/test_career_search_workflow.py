@@ -91,6 +91,91 @@ class TestCareerSearchWorkflow(
             remote=True,
         )
 
+    def create_cio_role(self):
+        analysis = RoleDetector().analyze(
+            cv_text=(
+                "DSI Groupe, gouvernance et transformation SI, COBIT et ITIL."
+            ),
+            extracted_skills=[
+                "gouvernance si",
+                "transformation si",
+                "cobit",
+                "itil",
+            ],
+        )
+        return next(
+            item for item in analysis.role_suggestions
+            if item.role_id == "cio"
+        )
+
+    def test_cio_role_terms_include_dsi_and_cio_aliases(self):
+        terms = CareerSearchWorkflow.role_terms(self.create_cio_role())
+
+        self.assertIn("dsi", terms)
+        self.assertIn("cio", terms)
+        self.assertIn("DSI / CIO", terms)
+
+    def test_clear_dsi_title_is_relevant(self):
+        job = Job(
+            title="Directeur des systèmes d'information",
+            company="Example",
+            location="Paris",
+            description="Pilotage de la transformation numérique.",
+            source="France Travail",
+            score=45,
+            matched_skills=[],
+        )
+        result = CareerSearchWorkflow(
+            job_service=FakeJobService([job])
+        ).search(
+            profile=self.create_profile(),
+            selected_role=self.create_cio_role(),
+        )
+
+        self.assertEqual(result.jobs, [job])
+        self.assertTrue(result.filter_diagnostics.jobs[0].title_match)
+
+    def test_cio_semantic_evidence_is_relevant_but_sql_alone_is_not(self):
+        semantic = Job(
+            title="Technology Executive",
+            company="Example",
+            location="Paris",
+            description="Transformation numérique.",
+            source="Test",
+            score=60,
+            matched_skills=["gouvernance si"],
+            match_details={
+                "semantic_matches": [
+                    {
+                        "profile_skill": "cloud",
+                        "job_skill": "architecture",
+                        "reason": "same_category",
+                    }
+                ]
+            },
+        )
+        sql_only = Job(
+            title="Backend Developer",
+            company="Example",
+            location="Paris",
+            description="SQL",
+            source="Test",
+            score=35,
+            matched_skills=["sql"],
+        )
+        result = CareerSearchWorkflow(
+            job_service=FakeJobService([semantic, sql_only])
+        ).search(
+            profile=self.create_profile(),
+            selected_role=self.create_cio_role(),
+        )
+
+        self.assertEqual(result.jobs, [semantic])
+        self.assertEqual(
+            result.filter_diagnostics.rejection_reasons,
+            {"insufficient_relevance_evidence": 1},
+        )
+
     def test_title_match_is_retained(self):
         job = Job(
             title="IT Project Director",
