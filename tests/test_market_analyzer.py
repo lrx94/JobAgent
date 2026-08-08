@@ -7,6 +7,7 @@ from src.market import (
     MarketAnalyzer,
 )
 from src.profile import Profile
+from src.career.search_workflow import CareerSearchResult
 
 
 class FakeSkillExtractor:
@@ -197,6 +198,87 @@ class TestMarketAnalyzer(
             stats["Terraform"].job_count,
             3,
         )
+
+    def test_missing_gap_exposes_job_context(self):
+        report = self.analyzer.analyze(
+            profile=self.profile,
+            jobs=self.create_jobs()[:1],
+        )
+        terraform = next(
+            item for item in report.missing_skill_stats
+            if item.skill == "Terraform"
+        )
+
+        self.assertEqual(terraform.job_count, 1)
+        self.assertEqual(len(terraform.evidence), 1)
+        evidence = terraform.evidence[0]
+        self.assertEqual(evidence.job_reference, "ft-1")
+        self.assertEqual(evidence.job_title, "Data Engineer Python Azure")
+        self.assertEqual(evidence.company, "Example One")
+        self.assertEqual(evidence.source, "France Travail")
+        self.assertIn("Terraform", evidence.context)
+
+    def test_gap_evidence_is_limited_but_count_is_complete(self):
+        analyzer = MarketAnalyzer(
+            skill_extractor=FakeSkillExtractor(),
+            maximum_evidence_per_skill=2,
+            minimum_pair_count=1,
+        )
+        report = analyzer.analyze(
+            profile=self.profile,
+            jobs=self.create_jobs(),
+        )
+        terraform = next(
+            item for item in report.missing_skill_stats
+            if item.skill == "Terraform"
+        )
+
+        self.assertEqual(terraform.job_count, 3)
+        self.assertEqual(len(terraform.evidence), 2)
+
+    def test_provider_skill_without_text_has_safe_empty_context(self):
+        job = Job(
+            title="Data Engineer",
+            company=None,
+            location="Paris",
+            description="Mission data.",
+            source="RemoteOK",
+            external_id="remote-tag",
+            skills=["Docker"],
+        )
+        report = self.analyzer.analyze(profile=self.profile, jobs=[job])
+        docker = next(
+            item for item in report.missing_skill_stats
+            if item.skill == "Docker"
+        )
+        self.assertEqual(docker.evidence[0].context, "")
+        self.assertEqual(
+            docker.evidence[0].company,
+            "Entreprise inconnue",
+        )
+
+    def test_career_portrait_excludes_rejected_remoteok_job(self):
+        relevant = self.create_jobs()[0]
+        rejected = Job(
+            title="Backend Engineer",
+            company="Remote Company",
+            location="Remote",
+            description="Docker Kubernetes",
+            source="RemoteOK",
+            external_id="remote-rejected",
+        )
+        report = self.analyzer.analyze_career_result(
+            profile=self.profile,
+            search_result=CareerSearchResult(
+                jobs=[relevant],
+                all_jobs=[relevant, rejected],
+            ),
+        )
+
+        self.assertEqual(report.total_jobs, 1)
+        skills = {item.skill for item in report.skill_stats}
+        self.assertIn("Terraform", skills)
+        self.assertNotIn("Docker", skills)
 
     def test_analyze_calculates_percentages(
         self,

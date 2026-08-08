@@ -7,6 +7,20 @@ from dataclasses import dataclass, field
     frozen=True,
     slots=True,
 )
+class MarketSkillEvidence:
+    """Exemple d'offre expliquant l'observation d'une compétence."""
+
+    job_reference: str
+    job_title: str
+    company: str | None
+    source: str
+    context: str
+
+
+@dataclass(
+    frozen=True,
+    slots=True,
+)
 class MarketSkillStat:
     """
     Fréquence d'une compétence dans l'échantillon
@@ -20,10 +34,17 @@ class MarketSkillStat:
     job_count: int
     percentage: float
     present_in_profile: bool = False
+    evidence: tuple[MarketSkillEvidence, ...] = ()
 
     @property
     def missing_from_profile(self) -> bool:
         return not self.present_in_profile
+
+    @property
+    def occurrence_count(self) -> int:
+        """Alias explicite pour les consommateurs orientés preuves."""
+
+        return self.job_count
 
 
 @dataclass(
