@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from urllib.error import HTTPError
 
 from src.providers.france_travail import (
     FranceTravailProvider,
@@ -152,6 +153,53 @@ class TestFranceTravailProvider(
             ),
             "Bearer token",
         )
+
+    def test_free_text_location_is_not_sent_as_commune_code(self):
+        parameters = FranceTravailProvider._parameters(
+            SearchRequest(keywords=["DSI"], locations=["Paris"])
+        )
+        self.assertEqual(parameters, {"motsCles": "DSI"})
+
+    def test_explicit_insee_code_is_sent_as_commune(self):
+        parameters = FranceTravailProvider._parameters(
+            SearchRequest(keywords=["DSI"], locations=["insee:75056"])
+        )
+        self.assertEqual(
+            parameters,
+            {"motsCles": "DSI", "commune": "75056"},
+        )
+
+    def test_postal_code_is_not_guessed_as_commune_code(self):
+        parameters = FranceTravailProvider._parameters(
+            SearchRequest(keywords=["DSI"], locations=["75001"])
+        )
+        self.assertEqual(parameters, {"motsCles": "DSI"})
+
+    def test_salary_and_remote_do_not_create_invalid_parameters(self):
+        parameters = FranceTravailProvider._parameters(
+            SearchRequest(
+                keywords=["DSI"],
+                locations=[],
+                salary_min=90000,
+                remote=True,
+            )
+        )
+        self.assertEqual(parameters, {"motsCles": "DSI"})
+
+    def test_http_400_remains_identifiable(self):
+        def failing_opener(request, timeout):
+            raise HTTPError(
+                request.full_url,
+                400,
+                "Bad Request",
+                hdrs=None,
+                fp=None,
+            )
+
+        provider = self.create_provider(failing_opener)
+
+        with self.assertRaisesRegex(RuntimeError, r"HTTP 400"):
+            provider.search(SearchRequest(keywords=["DSI"]))
 
     def test_invalid_request_is_rejected(
         self,

@@ -22,17 +22,79 @@ class JobLearningObservationExtractor:
     soumises au LearningSuggestionDetector.
     """
 
+    WORD_PATTERN = (
+        r"(?:\.[A-Za-z][A-Za-z0-9]*|"
+        r"[A-Za-zÀ-ÿ0-9+#-]+"
+        r"(?:['’][A-Za-zÀ-ÿ0-9+#-]+)*"
+        r"(?:\.[A-Za-zÀ-ÿ0-9+#-]+)*)"
+    )
+    SENTENCE_BOUNDARY_PATTERN = re.compile(
+        r"(?:\r?\n){2,}|[;•]+|(?<=[.!?])\s+(?=[A-ZÀ-Ý])"
+    )
+    CONTEXTUAL_TERM_PATTERN = re.compile(
+        rf"""
+        \b(?:aptitude|capacité|expérience|expertise|maîtrise|connaissance|compétences?|spécialisation)
+        (?:\s+{WORD_PATTERN}){{0,2}}?
+        \s+(?:à|dans|en|de|des|du|sur|avec)\s+
+        (?P<term>
+            {WORD_PATTERN}
+            (?:\s+(?!(?:et|ou|avec|dans|pour)\b){WORD_PATTERN}){{0,2}}
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+    BUSINESS_GROUP_PATTERN = re.compile(
+        rf"""
+        \b(?P<term>
+            (?:gestion|pilotage|management|encadrement)
+            \s+(?:(?:de|des|du)\s+|d['’])
+            {WORD_PATTERN}
+            (?:\s+(?!(?:et|ou|avec|dans|pour)\b){WORD_PATTERN}){{0,2}}
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+    OPTIONAL_COMPLEMENT_PATTERN = re.compile(
+        rf"""
+        \bet\s+(?:idéalement\s+)?(?:(?:de|des|du)\s+|d['’])
+        (?P<term>
+            (?:l['’])?{WORD_PATTERN}
+            (?:\s+(?!(?:et|ou|avec|dans|pour)\b){WORD_PATTERN}){{0,2}}
+        )
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+    SOFT_SKILL_PATTERN = re.compile(
+        rf"""
+        \bvous\s+(?:avez|possédez)\s+(?:un|une)\s+
+        (?P<term>{WORD_PATTERN}(?:\s+{WORD_PATTERN}){{0,3}})
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+    COORDINATED_NOUN_PATTERN = re.compile(
+        rf"\b(?:esprit|capacité)\s+d['’](?P<first>{WORD_PATTERN})"
+        rf"\s+et\s+de\s+(?P<second>{WORD_PATTERN})",
+        re.IGNORECASE,
+    )
     TECH_TERM_PATTERN = re.compile(
         r"""
-        (?<![\w.+#-])
+        (?<![\w.+#'’-])
         (
-            [A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9.+#-]*
             (?:
-                \s+
-                [A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9.+#-]*
-            ){0,2}
+                [A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ0-9.+#'’-]+){1,2}
+                |
+                [A-ZÀ-Ý0-9]{2,}(?:/[A-ZÀ-Ý0-9]+)*
+                |
+                \.[A-Za-z][A-Za-z0-9]*
+                |
+                [A-Za-z][A-Za-z0-9]*\.[A-Za-z0-9.]+
+                |
+                [A-Za-zÀ-ÿ]*[a-zà-ÿ][A-ZÀ-Ý][A-Za-zÀ-ÿ0-9]*
+                |
+                [A-Za-zÀ-ÿ0-9]*[0-9+#][A-Za-zÀ-ÿ0-9.+#/-]*
+            )
         )
-        (?![\w.+#-])
+        (?![\w+#'’-])
         """,
         re.VERBOSE,
     )
@@ -68,6 +130,25 @@ class JobLearningObservationExtractor:
         "votre",
         "travail",
         "emploi",
+    }
+    SOFT_SKILL_MODIFIERS = {
+        "bon",
+        "bonne",
+        "excellent",
+        "excellente",
+        "fort",
+        "forte",
+        "grande",
+        "très",
+    }
+    EXPERIENCE_WORDS = {
+        "compétence",
+        "compétences",
+        "connaissance",
+        "expérience",
+        "expertise",
+        "maîtrise",
+        "spécialisation",
     }
 
     def __init__(
@@ -141,37 +222,107 @@ class JobLearningObservationExtractor:
                 context=job.title,
             )
 
-        text = "\n".join(
-            value
-            for value in (
-                job.title,
-                job.description,
-            )
-            if str(value or "").strip()
-        )
-
-        for match in self.TECH_TERM_PATTERN.finditer(text):
-            term = match.group(1).strip()
-
-            if not self._is_candidate(term):
-                continue
-
-            context = self._excerpt(
-                text=text,
-                start=match.start(),
-                end=match.end(),
-            )
-
-            self._append_observation(
-                observations=observations,
-                seen=seen,
-                term=term,
-                source=source,
-                reference_id=reference_id,
-                context=context,
-            )
+        for text in (job.title, job.description):
+            for segment in self._segments(text):
+                for term in self._candidate_terms(segment):
+                    self._append_observation(
+                        observations=observations,
+                        seen=seen,
+                        term=term,
+                        source=source,
+                        reference_id=reference_id,
+                        context=segment,
+                    )
 
         return tuple(observations)
+
+    def _candidate_terms(self, segment: str) -> tuple[str, ...]:
+        terms: list[str] = []
+
+        for match in self.CONTEXTUAL_TERM_PATTERN.finditer(segment):
+            term = self._normalize_contextual_term(match.group("term"))
+            if self._is_contextual_candidate(term):
+                terms.append(term)
+
+        for match in self.BUSINESS_GROUP_PATTERN.finditer(segment):
+            term = self._normalize_contextual_term(match.group("term"))
+            if self._is_contextual_candidate(term):
+                terms.append(term)
+
+        for match in self.OPTIONAL_COMPLEMENT_PATTERN.finditer(segment):
+            term = self._normalize_contextual_term(match.group("term"))
+            if self._is_contextual_candidate(term):
+                terms.append(term)
+
+        for match in self.SOFT_SKILL_PATTERN.finditer(segment):
+            term = self._soft_skill_term(match.group("term"))
+            if term and self._is_contextual_candidate(term):
+                terms.append(term)
+
+        for match in self.COORDINATED_NOUN_PATTERN.finditer(segment):
+            terms.extend(
+                term for term in (
+                    match.group("first"),
+                    match.group("second"),
+                )
+                if self._is_contextual_candidate(term)
+            )
+
+        for match in self.TECH_TERM_PATTERN.finditer(segment):
+            term = match.group(1)
+            if self._is_candidate(term):
+                terms.append(term)
+
+        return tuple(terms)
+
+    @staticmethod
+    def _normalize_contextual_term(term: str) -> str:
+        cleaned = " ".join(str(term or "").split())
+        lowered = cleaned.casefold()
+
+        for prefix in ("l'", "l’", "la ", "le ", "les "):
+            if lowered.startswith(prefix):
+                return cleaned[len(prefix):]
+
+        return cleaned
+
+    def _soft_skill_term(self, term: str) -> str | None:
+        words = " ".join(str(term or "").split()).split()
+        normalized_words = [word.casefold() for word in words]
+
+        if any(word in self.EXPERIENCE_WORDS for word in normalized_words):
+            return None
+
+        while (
+            words
+            and words[0].casefold() in self.SOFT_SKILL_MODIFIERS
+        ):
+            words.pop(0)
+
+        if not words or len(words) > 2:
+            return None
+
+        return " ".join(words)
+
+    def _is_contextual_candidate(self, term: str) -> bool:
+        cleaned = " ".join(str(term or "").split())
+        words = cleaned.casefold().split()
+        return bool(
+            cleaned
+            and words
+            and words[0] not in self.stop_terms
+            and words[-1] not in self.stop_terms
+        )
+
+    @classmethod
+    def _segments(cls, value: str) -> tuple[str, ...]:
+        return tuple(
+            cleaned
+            for part in cls.SENTENCE_BOUNDARY_PATTERN.split(
+                str(value or "")
+            )
+            if (cleaned := " ".join(part.split()))
+        )
 
     def _is_candidate(
         self,

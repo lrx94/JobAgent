@@ -3,6 +3,7 @@ from src.market.analyzer import (
 )
 from src.market.models import (
     MarketReport,
+    MarketSkillEvidence,
     MarketSkillStat,
     MarketSourceStat,
     SkillCooccurrence,
@@ -18,6 +19,7 @@ __all__ = [
     "MarketProfileSkillResolver",
     "MarketProfileSkills",
     "MarketReport",
+    "MarketSkillEvidence",
     "MarketSkillStat",
     "MarketSourceStat",
     "SkillCooccurrence",

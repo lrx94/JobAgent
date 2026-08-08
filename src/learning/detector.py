@@ -5,12 +5,24 @@ import re
 import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable
+from enum import StrEnum
 
 from src.learning.models import (
     LearningObservation,
     LearningSuggestion,
     SuggestionType,
 )
+
+
+class CandidateKind(StrEnum):
+    """Classification explicable d'un terme candidat Learning."""
+
+    SKILL = "skill"
+    ROLE = "role"
+    HEADER = "header"
+    SYNTAX_FRAGMENT = "syntax_fragment"
+    VERBAL_MISSION = "verbal_mission"
+    GENERIC_TERM = "generic_term"
 
 
 class LearningSuggestionDetector:
@@ -24,6 +36,118 @@ class LearningSuggestionDetector:
     - du Market Analyzer ;
     - d'un futur extracteur de termes candidats.
     """
+
+    URL_OR_EMAIL_PATTERN = re.compile(
+        r"(?:https?://|www\.|\b[^\s@]+@[^\s@]+\.[^\s@]+)",
+        re.IGNORECASE,
+    )
+    UUID_PATTERN = re.compile(
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+        r"[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
+        re.IGNORECASE,
+    )
+    LONG_TECH_TOKEN_PATTERN = re.compile(
+        r"[A-Za-z0-9+/=:_-]{24,}"
+    )
+    HEX_HASH_PATTERN = re.compile(
+        r"\b[0-9a-f]{24,}\b",
+        re.IGNORECASE,
+    )
+    MINIMUM_CANDIDATE_QUALITY_SCORE = 2
+    DOCUMENT_HEADERS = {
+        "a propos",
+        "competences",
+        "competences requises",
+        "description du profil",
+        "description du poste",
+        "missions",
+        "profil recherche",
+        "qualifications",
+        "responsabilites",
+        "vos missions",
+        "votre profil",
+    }
+    SUBJECT_PRONOUNS = {
+        "elle",
+        "elles",
+        "il",
+        "ils",
+        "je",
+        "nous",
+        "on",
+        "tu",
+        "vous",
+    }
+    INCOMPLETE_FINAL_DETERMINERS = {
+        "des",
+        "du",
+        "l",
+        "la",
+        "le",
+        "les",
+        "un",
+        "une",
+    }
+    LEADING_FRAGMENT_WORDS = {
+        "a",
+        "au",
+        "aux",
+        "chez",
+        "dans",
+        "de",
+        "des",
+        "du",
+        "la",
+        "le",
+        "les",
+        "par",
+        "pour",
+        "sur",
+    }
+    TRAILING_FRAGMENT_WORDS = {
+        "a",
+        "d",
+        "de",
+        "des",
+        "du",
+        "l",
+        "la",
+        "le",
+        "les",
+        "qu",
+    }
+    MISSION_VERBS = {
+        "accompagner",
+        "assurer",
+        "conduire",
+        "definir",
+        "diffuser",
+        "encadrer",
+        "garantir",
+        "manager",
+        "mettre",
+        "organiser",
+        "participer",
+        "piloter",
+        "realiser",
+        "representer",
+        "superviser",
+    }
+    ROLE_WORDS = {
+        "directeur",
+        "directrice",
+        "responsable",
+    }
+    GENERIC_ISOLATED_TERMS = {
+        "dsi",
+        "enfin",
+        "information",
+        "it",
+        "requis",
+        "requise",
+        "rh",
+        "si",
+    }
 
     def __init__(
         self,
@@ -84,6 +208,11 @@ class LearningSuggestionDetector:
             if not normalized:
                 continue
 
+            if not self.is_quality_term(
+                observation.term
+            ):
+                continue
+
             if normalized in self.known_terms:
                 continue
 
@@ -121,6 +250,13 @@ class LearningSuggestionDetector:
                 continue
 
             contexts = self._contexts(items)
+
+            if self.candidate_quality_score(
+                display_terms[normalized],
+                occurrence_count=len(items),
+                context_count=len(contexts),
+            ) < self.MINIMUM_CANDIDATE_QUALITY_SCORE:
+                continue
 
             suggestions.append(
                 LearningSuggestion(
@@ -163,6 +299,124 @@ class LearningSuggestionDetector:
         )
 
         return tuple(suggestions)
+
+    @classmethod
+    def is_quality_term(
+        cls,
+        value: str,
+    ) -> bool:
+        """Quality Gate statique, déterministe et indépendant du métier."""
+
+        cleaned = " ".join(str(value or "").split())
+        if not cleaned or len(cleaned) < 2 or len(cleaned) > 80:
+            return False
+
+        if len(cleaned.split()) > 6:
+            return False
+
+        if "<" in cleaned or ">" in cleaned:
+            return False
+
+        if cls.URL_OR_EMAIL_PATTERN.search(cleaned):
+            return False
+
+        if cls.UUID_PATTERN.search(cleaned):
+            return False
+
+        if cls.HEX_HASH_PATTERN.search(cleaned):
+            return False
+
+        if cls.LONG_TECH_TOKEN_PATTERN.search(cleaned):
+            return False
+
+        alphanumeric = sum(character.isalnum() for character in cleaned)
+        if alphanumeric == 0:
+            return False
+
+        if cleaned.isdecimal():
+            return False
+
+        return cls.classify_candidate(cleaned) == CandidateKind.SKILL
+
+    @classmethod
+    def classify_candidate(cls, value: str) -> CandidateKind:
+        """Classe un terme par sa forme, sans connaissance métier ciblée."""
+
+        cleaned = " ".join(str(value or "").split())
+        normalized = cls.normalize_term(cleaned)
+        words = normalized.split()
+
+        if normalized in cls.DOCUMENT_HEADERS:
+            return CandidateKind.HEADER
+
+        if not words:
+            return CandidateKind.SYNTAX_FRAGMENT
+
+        if (
+            words[-1] in cls.TRAILING_FRAGMENT_WORDS
+            or cleaned.endswith(("'", "’"))
+        ):
+            return CandidateKind.SYNTAX_FRAGMENT
+
+        if words[0] in cls.LEADING_FRAGMENT_WORDS:
+            return CandidateKind.SYNTAX_FRAGMENT
+
+        if (
+            len(words) >= 3
+            and words[0] in cls.SUBJECT_PRONOUNS
+            and words[-1] in cls.INCOMPLETE_FINAL_DETERMINERS
+        ):
+            return CandidateKind.SYNTAX_FRAGMENT
+
+        if any(word in {"et", "ou"} for word in words[1:-1]):
+            return CandidateKind.SYNTAX_FRAGMENT
+
+        if words[0] in cls.MISSION_VERBS:
+            return CandidateKind.VERBAL_MISSION
+
+        if words[0] in cls.ROLE_WORDS:
+            return CandidateKind.ROLE
+
+        if normalized in cls.GENERIC_ISOLATED_TERMS:
+            return CandidateKind.GENERIC_TERM
+
+        return CandidateKind.SKILL
+
+    @classmethod
+    def candidate_quality_score(
+        cls,
+        value: str,
+        *,
+        occurrence_count: int,
+        context_count: int,
+    ) -> int:
+        """Score déterministe fondé sur la forme et les preuves disponibles."""
+
+        if not cls.is_quality_term(value):
+            return 0
+
+        cleaned = " ".join(str(value or "").split())
+        score = 1
+
+        if cls._is_plausible_acronym(cleaned):
+            score += 1
+
+        if occurrence_count >= 2:
+            score += 1
+
+        if context_count >= 2:
+            score += 1
+
+        return score
+
+    @staticmethod
+    def _is_plausible_acronym(value: str) -> bool:
+        compact = value.replace("/", "").replace(".", "")
+        return (
+            2 <= len(compact) <= 10
+            and any(character.isalpha() for character in compact)
+            and compact.upper() == compact
+        )
 
     def with_known_terms(
         self,

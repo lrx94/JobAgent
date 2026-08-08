@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from itertools import combinations
+import re
 from typing import Any
 
 from src.ai.skill_extractor import (
@@ -11,6 +12,7 @@ from src.ai.skill_extractor import (
 from src.domain import Job
 from src.market.models import (
     MarketReport,
+    MarketSkillEvidence,
     MarketSkillStat,
     MarketSourceStat,
     SkillCooccurrence,
@@ -33,6 +35,7 @@ class MarketAnalyzer:
         top_skill_limit: int = 25,
         top_pair_limit: int = 20,
         minimum_pair_count: int = 2,
+        maximum_evidence_per_skill: int = 3,
     ) -> None:
         self.skill_extractor = (
             skill_extractor
@@ -52,6 +55,10 @@ class MarketAnalyzer:
         self.minimum_pair_count = max(
             1,
             int(minimum_pair_count),
+        )
+        self.maximum_evidence_per_skill = max(
+            1,
+            int(maximum_evidence_per_skill),
         )
 
     def analyze(
@@ -121,6 +128,10 @@ class MarketAnalyzer:
         skill_job_counts: Counter[str] = (
             Counter()
         )
+        skill_evidence: dict[
+            str,
+            list[MarketSkillEvidence],
+        ] = defaultdict(list)
 
         pair_job_counts: Counter[
             tuple[str, str]
@@ -174,6 +185,14 @@ class MarketAnalyzer:
                 skill_job_counts[
                     skill
                 ] += 1
+                evidence = skill_evidence[skill]
+                if len(evidence) < self.maximum_evidence_per_skill:
+                    evidence.append(
+                        self._build_skill_evidence(
+                            job=job,
+                            skill=skill,
+                        )
+                    )
 
             for first, second in combinations(
                 sorted(
@@ -201,6 +220,7 @@ class MarketAnalyzer:
             profile_skill_keys=(
                 profile_skill_keys
             ),
+            skill_evidence=skill_evidence,
         )
 
         missing_stats = tuple(
@@ -287,7 +307,33 @@ class MarketAnalyzer:
                 "minimum_pair_count": (
                     self.minimum_pair_count
                 ),
+                "maximum_evidence_per_skill": (
+                    self.maximum_evidence_per_skill
+                ),
             },
+        )
+
+    def analyze_career_result(
+        self,
+        *,
+        profile: Profile,
+        search_result: Any,
+        profile_skills: Iterable[str] | None = None,
+        profile_skill_source: str = "keywords",
+    ) -> MarketReport:
+        """Construit le portrait métier depuis les seules offres pertinentes."""
+
+        jobs = getattr(search_result, "jobs", None)
+        if jobs is None:
+            raise TypeError(
+                "search_result doit exposer une collection jobs."
+            )
+
+        return self.analyze(
+            profile=profile,
+            jobs=jobs,
+            profile_skills=profile_skills,
+            profile_skill_source=profile_skill_source,
         )
 
     def _extract_profile_skills(
@@ -307,6 +353,37 @@ class MarketAnalyzer:
             self.skill_extractor.extract(
                 text
             )
+        )
+
+    @staticmethod
+    def _build_skill_evidence(
+        *,
+        job: Job,
+        skill: str,
+    ) -> MarketSkillEvidence:
+        text = " ".join(
+            str(value or "").strip()
+            for value in (job.title, job.description)
+            if str(value or "").strip()
+        )
+        match = re.search(
+            re.escape(skill),
+            text,
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            context = ""
+        else:
+            start = max(0, match.start() - 80)
+            end = min(len(text), match.end() + 80)
+            context = " ".join(text[start:end].split())
+
+        return MarketSkillEvidence(
+            job_reference=str(job.external_id or job.identity),
+            job_title=str(job.title or "Offre sans titre").strip(),
+            company=(str(job.company).strip() if job.company else None),
+            source=str(job.source or "Source inconnue").strip(),
+            context=context,
         )
 
     def _normalize_profile_skills(
@@ -407,6 +484,10 @@ class MarketAnalyzer:
         skill_job_counts: Counter[str],
         total_jobs: int,
         profile_skill_keys: set[str],
+        skill_evidence: dict[
+            str,
+            list[MarketSkillEvidence],
+        ],
     ) -> tuple[MarketSkillStat, ...]:
         ordered = sorted(
             skill_job_counts.items(),
@@ -444,6 +525,9 @@ class MarketAnalyzer:
                     present_in_profile=(
                         skill.casefold()
                         in profile_skill_keys
+                    ),
+                    evidence=tuple(
+                        skill_evidence.get(skill, ())
                     ),
                 )
             )

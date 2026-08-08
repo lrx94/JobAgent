@@ -32,6 +32,9 @@ from src.workspace.ui import (
 )
 from src.workspace.ui.actions import (
     WorkspaceCVActions,
+    finalize_onboarding_session,
+    get_profile_learning_result,
+    synchronize_profile_selection,
 )
 import hashlib
 from src.market import (
@@ -72,6 +75,10 @@ ONBOARDING_CV_TITLE_KEY = (
 
 ONBOARDING_KEYWORDS_KEY = (
     "workspace_onboarding_keywords"
+)
+ONBOARDING_SUCCESS_KEY = "workspace_onboarding_success"
+ONBOARDING_UPLOADER_GENERATION_KEY = (
+    "workspace_onboarding_uploader_generation"
 )
 LEARNING_RESULT_KEY_PREFIX = (
     "workspace_learning_result"
@@ -131,8 +138,10 @@ def learning_cache_key(
 def get_learning_result(
     profile_id: str,
 ):
-    return st.session_state.get(
-        learning_cache_key(profile_id)
+    return get_profile_learning_result(
+        st.session_state,
+        profile_id=profile_id,
+        learning_result_key_prefix=LEARNING_RESULT_KEY_PREFIX,
     )
 
 
@@ -308,10 +317,23 @@ def render_profile_from_cv_creation() -> None:
             "par JobAgent."
         )
 
+        success_message = st.session_state.pop(
+            ONBOARDING_SUCCESS_KEY,
+            None,
+        )
+        if success_message:
+            st.success(success_message)
+
+        uploader_generation = int(
+            st.session_state.get(
+                ONBOARDING_UPLOADER_GENERATION_KEY,
+                0,
+            )
+        )
         uploaded_file = st.file_uploader(
             "CV au format PDF",
             type=["pdf"],
-            key="workspace_onboarding_cv",
+            key=f"workspace_onboarding_cv_{uploader_generation}",
         )
 
         if uploaded_file is None:
@@ -581,23 +603,23 @@ def render_profile_from_cv_creation() -> None:
             )
             return
 
-        st.session_state[
-            SELECTED_PROFILE_KEY
-        ] = result.profile_id
-
-        for state_key in (
-            ONBOARDING_FILE_DIGEST_KEY,
-            ONBOARDING_PREVIEW_KEY,
-            ONBOARDING_PROFILE_NAME_KEY,
-            ONBOARDING_CV_TITLE_KEY,
-            ONBOARDING_KEYWORDS_KEY,
-        ):
-            st.session_state.pop(
-                state_key,
-                None,
-            )
-
-        st.success(
+        finalize_onboarding_session(
+            st.session_state,
+            profile_id=result.profile_id,
+            selected_profile_key=SELECTED_PROFILE_KEY,
+            keys_to_clear=(
+                ONBOARDING_FILE_DIGEST_KEY,
+                ONBOARDING_PREVIEW_KEY,
+                ONBOARDING_PROFILE_NAME_KEY,
+                ONBOARDING_CV_TITLE_KEY,
+                ONBOARDING_KEYWORDS_KEY,
+                "workspace_onboarding_locations",
+                "onboarding_salary_min",
+                "onboarding_remote",
+            ),
+            generation_key=ONBOARDING_UPLOADER_GENERATION_KEY,
+        )
+        st.session_state[ONBOARDING_SUCCESS_KEY] = (
             "Le profil a été créé avec les données "
             "issues de l'analyse du CV."
         )
@@ -1632,20 +1654,6 @@ def render_market_report(
             )
         )
 
-        source_jobs = list(
-            getattr(
-                search_result,
-                "all_jobs",
-                [],
-            )
-            or getattr(
-                search_result,
-                "jobs",
-                [],
-            )
-            or []
-        )
-
         primary_cv_id = (
             profile.primary_cv.cv_id
             if profile.primary_cv
@@ -1662,9 +1670,9 @@ def render_market_report(
             )
         )
 
-        report = market_analyzer.analyze(
+        report = market_analyzer.analyze_career_result(
             profile=context.profile,
-            jobs=source_jobs,
+            search_result=search_result,
             profile_skills=(
                 resolved_profile_skills
                 .skills
@@ -1804,6 +1812,26 @@ def render_market_report(
             use_container_width=True,
             hide_index=True,
         )
+
+        for item in report.missing_skill_stats[:10]:
+            with st.expander(
+                f"Contexte — {item.skill} ({item.job_count} offre(s))",
+                expanded=False,
+            ):
+                if not item.evidence:
+                    st.caption("Aucun contexte d'annonce disponible.")
+                    continue
+
+                for evidence in item.evidence:
+                    heading = evidence.job_title
+                    if evidence.company:
+                        heading += f" — {evidence.company}"
+                    st.write(f"**{heading}**")
+                    st.caption(
+                        f"{evidence.source} · {evidence.job_reference}"
+                    )
+                    if evidence.context:
+                        st.caption(evidence.context)
 
     if report.cooccurrences:
         with st.expander(
@@ -1998,24 +2026,12 @@ def render_search_panel(
     )
 
     if learning_result is None:
-        jobs_for_learning = tuple(
-            getattr(
-                search_result,
-                "all_jobs",
-                None,
-            )
-            or getattr(
-                search_result,
-                "jobs",
-                (),
-            )
-        )
-
         try:
             learning_result = (
                 workspace.learning_service
-                .analyze_jobs(
-                    jobs_for_learning
+                .analyze_search_result(
+                    search_result,
+                    profile_id=profile_id,
                 )
             )
         except Exception as error:
@@ -2047,7 +2063,7 @@ def render_search_panel(
         try:
             current_learning_suggestions = (
                 workspace.learning_service
-                .list_suggestions()
+                .list_suggestions(profile_id=profile_id)
             )
         except Exception as error:
             st.warning(
@@ -2072,6 +2088,7 @@ def render_search_panel(
                 learning_service=(
                     workspace.learning_service
                 ),
+                profile_id=profile_id,
                 suggestions=(
                     current_learning_suggestions
                 ),
@@ -2121,14 +2138,6 @@ selected_profile_id = (
     )
 )
 
-selected_profile = (
-    snapshot.get_profile(
-        selected_profile_id
-    )
-    if selected_profile_id
-    else None
-)
-
 st.title("🧭 Career Workspace")
 
 display_name = str(
@@ -2163,6 +2172,20 @@ with navigation_column:
             selected_profile_id
         ),
     )
+
+selected_profile_id = st.session_state.get(
+    SELECTED_PROFILE_KEY
+)
+synchronize_profile_selection(
+    st.session_state,
+    profile_id=selected_profile_id,
+    learning_result_key_prefix=LEARNING_RESULT_KEY_PREFIX,
+)
+selected_profile = (
+    snapshot.get_profile(selected_profile_id)
+    if selected_profile_id
+    else None
+)
 
 with dashboard_column:
     render_profile_dashboard(

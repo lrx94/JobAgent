@@ -36,6 +36,8 @@ class LearningSuggestionRepository:
 
     def list_all(
         self,
+        *,
+        profile_id: str | None = None,
     ) -> tuple[LearningSuggestion, ...]:
         payload = self._read_payload()
 
@@ -47,6 +49,13 @@ class LearningSuggestionRepository:
             )
             if isinstance(item, dict)
         ]
+
+        if profile_id is not None:
+            normalized_profile_id = str(profile_id).strip()
+            suggestions = [
+                item for item in suggestions
+                if item.profile_id == normalized_profile_id
+            ]
 
         suggestions.sort(
             key=lambda item: (
@@ -62,17 +71,23 @@ class LearningSuggestionRepository:
     def get(
         self,
         suggestion_id: str,
+        *,
+        profile_id: str | None = None,
     ) -> LearningSuggestion | None:
         normalized_id = str(
             suggestion_id or ""
         ).strip()
+        normalized_profile_id = (
+            str(profile_id).strip()
+            if profile_id is not None
+            else None
+        )
 
         return next(
             (
-                item
-                for item in self.list_all()
-                if item.suggestion_id
-                == normalized_id
+                item for item in self.list_all()
+                if item.suggestion_id == normalized_id
+                and item.profile_id == normalized_profile_id
             ),
             None,
         )
@@ -85,9 +100,10 @@ class LearningSuggestionRepository:
         ]
         | list[LearningSuggestion],
     ) -> tuple[LearningSuggestion, ...]:
+        all_existing = self.list_all()
         existing = {
-            item.suggestion_id: item
-            for item in self.list_all()
+            (item.profile_id, item.suggestion_id): item
+            for item in all_existing
         }
 
         for suggestion in suggestions or ():
@@ -100,19 +116,28 @@ class LearningSuggestionRepository:
                     "des LearningSuggestion."
                 )
 
-            previous = existing.get(
-                suggestion.suggestion_id
+            identity = (
+                suggestion.profile_id,
+                suggestion.suggestion_id,
             )
+            previous = existing.get(identity)
+
+            if previous is None and suggestion.profile_id is not None:
+                previous = next(
+                    (
+                        item for item in all_existing
+                        if item.profile_id is None
+                        and item.suggestion_id == suggestion.suggestion_id
+                        and item.status != SuggestionStatus.CANDIDATE
+                    ),
+                    None,
+                )
 
             if previous is None:
-                existing[
-                    suggestion.suggestion_id
-                ] = suggestion
+                existing[identity] = suggestion
                 continue
 
-            existing[
-                suggestion.suggestion_id
-            ] = self._merge(
+            existing[identity] = self._merge(
                 previous=previous,
                 current=suggestion,
             )
@@ -122,6 +147,7 @@ class LearningSuggestionRepository:
                 existing.values(),
                 key=lambda item: (
                     item.normalized_term,
+                    item.profile_id or "",
                     item.suggestion_id,
                 ),
             )
@@ -135,6 +161,7 @@ class LearningSuggestionRepository:
         *,
         suggestion_id: str,
         status: SuggestionStatus,
+        profile_id: str | None = None,
     ) -> LearningSuggestion:
         if not isinstance(
             status,
@@ -145,7 +172,7 @@ class LearningSuggestionRepository:
             )
 
         suggestions = {
-            item.suggestion_id: item
+            (item.profile_id, item.suggestion_id): item
             for item in self.list_all()
         }
 
@@ -153,9 +180,11 @@ class LearningSuggestionRepository:
             suggestion_id or ""
         ).strip()
 
-        current = suggestions.get(
-            normalized_id
+        identity = (
+            str(profile_id).strip() if profile_id is not None else None,
+            normalized_id,
         )
+        current = suggestions.get(identity)
 
         if current is None:
             raise KeyError(
@@ -168,9 +197,7 @@ class LearningSuggestionRepository:
             status=status,
         )
 
-        suggestions[
-            normalized_id
-        ] = updated
+        suggestions[identity] = updated
 
         self._write(
             tuple(suggestions.values())
@@ -223,6 +250,7 @@ class LearningSuggestionRepository:
                 or current.canonical_target
             ),
             status=preserved_status,
+            profile_id=current.profile_id,
         )
 
     def _read_payload(
@@ -265,7 +293,7 @@ class LearningSuggestionRepository:
         ],
     ) -> None:
         payload = {
-            "version": 1,
+            "version": 2,
             "suggestions": [
                 self._serialize(item)
                 for item in suggestions
@@ -330,6 +358,7 @@ class LearningSuggestionRepository:
                 suggestion.canonical_target
             ),
             "status": suggestion.status.value,
+            "profile_id": suggestion.profile_id,
         }
 
     @staticmethod
@@ -388,4 +417,5 @@ class LearningSuggestionRepository:
                     SuggestionStatus.CANDIDATE.value,
                 )
             ),
+            profile_id=payload.get("profile_id"),
         )

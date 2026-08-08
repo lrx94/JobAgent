@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -162,21 +163,11 @@ class FranceTravailProvider(JobProvider):
                 request.primary_keyword
             )
 
-        if request.primary_location:
-            location = (
-                request.primary_location
-            )
-
-            if (
-                location.casefold()
-                not in {
-                    "remote",
-                    "télétravail",
-                }
-            ):
-                parameters[
-                    "commune"
-                ] = location
+        commune_code = FranceTravailProvider._commune_code(
+            request.primary_location
+        )
+        if commune_code is not None:
+            parameters["commune"] = commune_code
 
         if request.contract_types:
             parameters[
@@ -186,6 +177,21 @@ class FranceTravailProvider(JobProvider):
             )
 
         return parameters
+
+    @staticmethod
+    def _commune_code(location: str) -> str | None:
+        """Ne convertit jamais un libellé libre en code commune API."""
+
+        normalized = str(location or "").strip()
+        if not normalized.casefold().startswith("insee:"):
+            return None
+
+        normalized = normalized.split(":", 1)[1].strip()
+
+        if re.fullmatch(r"(?:\d{5}|2[AB]\d{3})", normalized, re.IGNORECASE):
+            return normalized.upper()
+
+        return None
 
     def _fetch(
         self,

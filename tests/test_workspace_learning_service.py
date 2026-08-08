@@ -16,6 +16,7 @@ from src.workspace.learning_service import (
     WorkspaceLearningService,
     WorkspaceLearningSummary,
 )
+from src.career.search_workflow import CareerSearchResult
 
 
 class TestWorkspaceLearningSummary(
@@ -59,6 +60,8 @@ class TestWorkspaceLearningSummary(
 class TestWorkspaceLearningService(
     unittest.TestCase
 ):
+
+    PROFILE_ID = "data-profile"
 
     def setUp(self) -> None:
         self.temporary_directory = (
@@ -136,7 +139,8 @@ class TestWorkspaceLearningService(
             [
                 self.create_job("ft-1"),
                 self.create_job("ft-2"),
-            ]
+            ],
+            profile_id=self.PROFILE_ID,
         )
 
         detected_terms = {
@@ -170,12 +174,111 @@ class TestWorkspaceLearningService(
             [
                 job,
                 job,
-            ]
+            ],
+            profile_id=self.PROFILE_ID,
         )
 
         self.assertEqual(
             result.detected,
             (),
+        )
+
+    def test_search_result_uses_only_career_relevant_jobs(self):
+        relevant_one = self.create_job("relevant-1")
+        relevant_two = self.create_job("relevant-2")
+        irrelevant_jobs = [
+            Job(
+                title="Directeur SI",
+                company="Noise",
+                location="Paris",
+                description="Définir la stratégie des SI.",
+                source="France Travail",
+                external_id=f"noise-{index}",
+                skills=["Stratégie SI"],
+            )
+            for index in range(3)
+        ]
+        result = self.service.analyze_search_result(
+            CareerSearchResult(
+                jobs=[relevant_one, relevant_two],
+                all_jobs=[relevant_one, relevant_two, *irrelevant_jobs],
+            ),
+            profile_id=self.PROFILE_ID,
+        )
+
+        terms = {item.normalized_term for item in result.detected}
+        self.assertIn("microsoft fabric", terms)
+        self.assertNotIn("strategie si", terms)
+
+    def test_two_profiles_have_distinct_learning_populations(self):
+        dsi_jobs = [
+            Job(
+                title="DSI",
+                company="Example",
+                location="Paris",
+                description="Microsoft Fabric requis.",
+                source="France Travail",
+                external_id=f"dsi-{index}",
+                skills=["Microsoft Fabric"],
+            )
+            for index in range(2)
+        ]
+        daf_jobs = [
+            Job(
+                title="DAF",
+                company="Example",
+                location="Paris",
+                description="Pilotage financier requis.",
+                source="France Travail",
+                external_id=f"daf-{index}",
+                skills=["Pilotage financier"],
+            )
+            for index in range(2)
+        ]
+
+        self.service.analyze_jobs(dsi_jobs, profile_id="dsi")
+        self.service.analyze_jobs(daf_jobs, profile_id="daf")
+
+        dsi_terms = {
+            item.normalized_term
+            for item in self.service.list_suggestions(profile_id="dsi")
+        }
+        daf_terms = {
+            item.normalized_term
+            for item in self.service.list_suggestions(profile_id="daf")
+        }
+        self.assertIn("microsoft fabric", dsi_terms)
+        self.assertNotIn("microsoft fabric", daf_terms)
+        self.assertIn("pilotage financier", daf_terms)
+        self.assertNotIn("pilotage financier", dsi_terms)
+
+    def test_two_users_use_distinct_learning_repositories(self):
+        other_repository = LearningSuggestionRepository(
+            Path(self.temporary_directory.name)
+            / "other-user"
+            / "suggestions.json"
+        )
+        other_service = WorkspaceLearningService(
+            user_id="user-456",
+            learning_service=AssistedLearningService(
+                detector=LearningSuggestionDetector(
+                    minimum_occurrences=2
+                ),
+                repository=other_repository,
+            ),
+        )
+        jobs = [
+            self.create_job("other-1"),
+            self.create_job("other-2"),
+        ]
+        other_service.analyze_jobs(jobs, profile_id="dsi")
+
+        self.assertEqual(
+            self.service.list_suggestions(profile_id="dsi"),
+            (),
+        )
+        self.assertTrue(
+            other_service.list_suggestions(profile_id="dsi")
         )
 
     def test_accepts_suggestion(
@@ -185,7 +288,8 @@ class TestWorkspaceLearningService(
             [
                 self.create_job("ft-1"),
                 self.create_job("ft-2"),
-            ]
+            ],
+            profile_id=self.PROFILE_ID,
         )
 
         suggestion = next(
@@ -196,7 +300,8 @@ class TestWorkspaceLearningService(
         )
 
         accepted = self.service.accept(
-            suggestion.suggestion_id
+            self.PROFILE_ID,
+            suggestion.suggestion_id,
         )
 
         self.assertEqual(
@@ -211,7 +316,8 @@ class TestWorkspaceLearningService(
             [
                 self.create_job("ft-1"),
                 self.create_job("ft-2"),
-            ]
+            ],
+            profile_id=self.PROFILE_ID,
         )
 
         suggestion = next(
@@ -222,7 +328,8 @@ class TestWorkspaceLearningService(
         )
 
         rejected = self.service.reject(
-            suggestion.suggestion_id
+            self.PROFILE_ID,
+            suggestion.suggestion_id,
         )
 
         self.assertEqual(
@@ -237,7 +344,8 @@ class TestWorkspaceLearningService(
             [
                 self.create_job("ft-1"),
                 self.create_job("ft-2"),
-            ]
+            ],
+            profile_id=self.PROFILE_ID,
         )
 
         suggestion = next(
@@ -248,12 +356,14 @@ class TestWorkspaceLearningService(
         )
 
         self.service.ignore(
-            suggestion.suggestion_id
+            self.PROFILE_ID,
+            suggestion.suggestion_id,
         )
 
         ignored = (
             self.service
             .list_suggestions(
+                profile_id=self.PROFILE_ID,
                 status=(
                     SuggestionStatus.IGNORED
                 )
@@ -271,14 +381,15 @@ class TestWorkspaceLearningService(
         with self.assertRaises(
             WorkspaceLearningError
         ):
-            self.service.accept("")
+            self.service.accept(self.PROFILE_ID, "")
 
     def test_invalid_job_is_rejected(
         self,
     ) -> None:
         with self.assertRaises(TypeError):
             self.service.analyze_jobs(
-                [object()]
+                [object()],
+                profile_id=self.PROFILE_ID,
             )
 
     def test_empty_user_id_is_rejected(

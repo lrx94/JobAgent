@@ -7,6 +7,7 @@ from src.profile import Profile
 from src.career.user_cv_profile_service import (
     UserCVProfileService,
 )
+from src.career.cv_profile_service import CVProfileService
 from src.cvs.exceptions import CVError
 from src.cvs.models import CVDocument
 from src.cvs.profile_cv_models import (
@@ -369,6 +370,14 @@ class WorkspaceOnboardingService:
             analyze=analyze,
         )
 
+        reusable = self._find_reusable_result(
+            imported=imported,
+            profile=profile,
+            selected_role=selected_role,
+        )
+        if reusable is not None:
+            return reusable
+
         profile_created = False
 
         try:
@@ -424,6 +433,72 @@ class WorkspaceOnboardingService:
                 imported.duplicate_reused
             ),
             warnings=imported.warnings,
+        )
+
+    def _find_reusable_result(
+        self,
+        *,
+        imported,
+        profile: Profile,
+        selected_role: RoleSuggestion | None,
+    ) -> WorkspaceOnboardingResult | None:
+        """Rend une double soumission identique idempotente par utilisateur."""
+
+        if not imported.duplicate_reused:
+            return None
+
+        associations = (
+            self.association_service
+            .association_repository
+            .list_for_cv(imported.cv_id)
+        )
+        expected_role_id = (
+            selected_role.role_id if selected_role is not None else None
+        )
+
+        for association in associations:
+            try:
+                config = self.profile_service.load_profile_config(
+                    association.profile_id
+                )
+            except (FileNotFoundError, ValueError):
+                continue
+
+            career = config.get("career", {})
+            role_id = (
+                str(career.get("selected_role_id", "")).strip()
+                if isinstance(career, dict)
+                else ""
+            )
+            if self._profile_matches_config(profile, config) and (
+                role_id or None
+            ) == expected_role_id:
+                return WorkspaceOnboardingResult(
+                    profile_id=association.profile_id,
+                    document=imported.document,
+                    association=association,
+                    analysis=imported.analysis,
+                    duplicate_reused=True,
+                    warnings=imported.warnings,
+                )
+
+        return None
+
+    @staticmethod
+    def _profile_matches_config(
+        profile: Profile,
+        config: dict,
+    ) -> bool:
+        normalize = CVProfileService._normalize_list
+        return (
+            str(config.get("name", "")).strip() == profile.name.strip()
+            and normalize(config.get("keywords", ()))
+            == normalize(profile.keywords)
+            and normalize(config.get("locations", ()))
+            == normalize(profile.locations)
+            and int(config.get("salary_min", 0) or 0)
+            == int(profile.salary_min or 0)
+            and bool(config.get("remote", False)) is bool(profile.remote)
         )
 
     def create_from_stream(

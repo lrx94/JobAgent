@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 
 from src.domain import Job
 from src.learning.detector import (
@@ -64,6 +65,8 @@ class AssistedLearningService:
     def analyze_jobs(
         self,
         jobs: Iterable[Job],
+        *,
+        profile_id: str | None = None,
     ) -> tuple[LearningSuggestion, ...]:
         observations = (
             self.job_observer.extract(
@@ -77,6 +80,15 @@ class AssistedLearningService:
             )
         )
 
+        if profile_id is not None:
+            normalized_profile_id = str(profile_id).strip()
+            if not normalized_profile_id:
+                raise ValueError("profile_id ne peut pas être vide.")
+            suggestions = tuple(
+                replace(item, profile_id=normalized_profile_id)
+                for item in suggestions
+            )
+
         self.repository.save_many(
             suggestions
         )
@@ -87,9 +99,16 @@ class AssistedLearningService:
         self,
         *,
         status: SuggestionStatus | None = None,
+        profile_id: str | None = None,
     ) -> tuple[LearningSuggestion, ...]:
         suggestions = (
-            self.repository.list_all()
+            self.repository.list_all(profile_id=profile_id)
+        )
+
+        suggestions = tuple(
+            item for item in suggestions
+            if item.status != SuggestionStatus.CANDIDATE
+            or self.detector.is_quality_term(item.observed_term)
         )
 
         if status is None:
@@ -104,26 +123,35 @@ class AssistedLearningService:
     def accept(
         self,
         suggestion_id: str,
+        *,
+        profile_id: str | None = None,
     ) -> LearningSuggestion:
         return self.repository.change_status(
             suggestion_id=suggestion_id,
             status=SuggestionStatus.ACCEPTED,
+            profile_id=profile_id,
         )
 
     def reject(
         self,
         suggestion_id: str,
+        *,
+        profile_id: str | None = None,
     ) -> LearningSuggestion:
         return self.repository.change_status(
             suggestion_id=suggestion_id,
             status=SuggestionStatus.REJECTED,
+            profile_id=profile_id,
         )
 
     def ignore(
         self,
         suggestion_id: str,
+        *,
+        profile_id: str | None = None,
     ) -> LearningSuggestion:
         return self.repository.change_status(
             suggestion_id=suggestion_id,
             status=SuggestionStatus.IGNORED,
+            profile_id=profile_id,
         )

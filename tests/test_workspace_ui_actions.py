@@ -4,8 +4,78 @@ import unittest
 
 from src.workspace.ui.actions import (
     WorkspaceCVActions,
+    finalize_onboarding_session,
+    get_profile_learning_result,
+    synchronize_profile_selection,
+)
+from src.career.search_workflow import CareerSearchResult
+from src.workspace.search import WorkspaceSearchCache
+from src.workspace.learning_service import (
+    WorkspaceLearningResult,
+    WorkspaceLearningSummary,
 )
 
+
+def test_finalize_onboarding_session_selects_and_clears_preview():
+    state = {
+        "selected": "old",
+        "preview": object(),
+        "upload": b"pdf",
+        "generation": 2,
+        "unrelated": "kept",
+    }
+
+    finalize_onboarding_session(
+        state,
+        profile_id="new-profile",
+        selected_profile_key="selected",
+        keys_to_clear=("preview", "upload"),
+        generation_key="generation",
+    )
+
+    assert state == {
+        "selected": "new-profile",
+        "unrelated": "kept",
+        "generation": 3,
+    }
+
+
+def test_profile_transition_clears_previous_search_and_learning():
+    state = {
+        "workspace_learning_result_daf": object(),
+        "workspace_learning_result_dsi": object(),
+    }
+    daf_result = CareerSearchResult()
+    WorkspaceSearchCache.set(state, "daf", daf_result)
+    WorkspaceSearchCache.activate_profile(state, "daf")
+
+    previous = synchronize_profile_selection(
+        state,
+        profile_id="dsi",
+        learning_result_key_prefix="workspace_learning_result",
+    )
+
+    assert previous == "daf"
+    assert WorkspaceSearchCache.get(state, "daf") is None
+    assert "workspace_learning_result_daf" not in state
+    assert "workspace_learning_result_dsi" in state
+
+
+def test_learning_cache_rejects_result_from_another_profile():
+    result = WorkspaceLearningResult(
+        detected=(),
+        stored=(),
+        summary=WorkspaceLearningSummary.from_suggestions(()),
+        profile_id="dsi",
+    )
+    state = {"workspace_learning_result_daf": result}
+
+    assert get_profile_learning_result(
+        state,
+        profile_id="daf",
+        learning_result_key_prefix="workspace_learning_result",
+    ) is None
+    assert "workspace_learning_result_daf" not in state
 
 class FakeCVService:
 

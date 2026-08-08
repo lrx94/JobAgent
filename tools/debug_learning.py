@@ -45,12 +45,7 @@ result = search_service.search(
 )
 
 jobs = tuple(
-    getattr(
-        result,
-        "all_jobs",
-        None,
-    )
-    or result.jobs
+    result.jobs
 )
 
 print(f"{len(jobs)} offres récupérées")
@@ -61,7 +56,8 @@ print("Learning")
 print("=" * 80)
 
 learning = workspace.learning_service.analyze_jobs(
-    jobs
+    jobs,
+    profile_id=PROFILE_ID,
 )
 
 print()
