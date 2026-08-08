@@ -338,6 +338,27 @@ class TestWorkspaceOnboarding(
             1,
         )
 
+    def test_identical_double_submission_reuses_profile(self):
+        first = self.workspace.onboarding_service.create_from_bytes(
+            content=PDF_CONTENT,
+            original_filename="cv.pdf",
+            profile=self.create_profile(),
+            analyze=False,
+        )
+        second = self.workspace.onboarding_service.create_from_bytes(
+            content=PDF_CONTENT,
+            original_filename="cv.pdf",
+            profile=self.create_profile(),
+            analyze=False,
+        )
+
+        self.assertEqual(second.profile_id, first.profile_id)
+        self.assertTrue(second.duplicate_reused)
+        self.assertEqual(
+            self.workspace.profile_service.list_profiles(),
+            [first.profile_id],
+        )
+
     def test_result_can_update_workspace_state(
         self,
     ):
