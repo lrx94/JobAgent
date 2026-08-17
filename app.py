@@ -7,6 +7,8 @@ import streamlit as st
 from src.services.job_service import JobService
 from src.ui.dashboard import display_dashboard
 from src.ui.job_card import display_job
+from src.ui.layout import render_brand
+from src.ui.theme import apply_jobagent_theme
 from src.auth.adapters.streamlit_bootstrap import (
     require_streamlit_user,
 )
@@ -26,17 +28,19 @@ STORAGE_ROOT = Path("data") / "users"
 
 st.set_page_config(
     page_title="JobAgent",
-    page_icon="🤖",
+    page_icon=":material/work:",
     layout="wide",
 )
+apply_jobagent_theme()
 user_context = require_streamlit_user()
 
-st.title("🚀 JobAgent")
+with st.sidebar:
+    render_brand()
+
+st.title("JobAgent")
 st.caption(
     "Votre assistant intelligent de recherche d'emploi"
 )
-
-st.divider()
 
 
 # --------------------------------------------------
@@ -171,7 +175,7 @@ with st.sidebar.expander("✏️ Modifier les contraintes", expanded=False):
         )
         save_constraints = st.form_submit_button(
             "Enregistrer les contraintes",
-            use_container_width=True,
+            width="stretch",
         )
 
     if save_constraints:
@@ -257,7 +261,7 @@ st.divider()
 
 search_clicked = st.button(
     "🔍 Rechercher des offres",
-    use_container_width=True,
+    width="stretch",
     type="primary",
 )
 

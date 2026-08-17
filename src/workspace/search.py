@@ -344,15 +344,12 @@ class WorkspaceSearchCache:
         session_state: MutableMapping[str, Any],
         profile_id: str | None,
     ) -> str | None:
-        """Lie le cache au profil actif et invalide seulement l'ancien."""
+        """Mémorise le profil actif sans supprimer les caches par profil."""
 
         normalized = str(profile_id or "").strip() or None
         previous = str(
             session_state.get(cls.ACTIVE_PROFILE_KEY) or ""
         ).strip() or None
-
-        if previous != normalized and previous is not None:
-            cls.clear(session_state, previous)
 
         session_state[cls.ACTIVE_PROFILE_KEY] = normalized
         return previous

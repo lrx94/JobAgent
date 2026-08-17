@@ -1,9 +1,85 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, MutableMapping
 
-from src.workspace.search import WorkspaceSearchCache
+from src.career.search_workflow import CareerSearchResult
+from src.workspace.search import (
+    WorkspaceSearchCache,
+    WorkspaceSearchError,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileSearchAvailability:
+    result: CareerSearchResult | None
+    searched: bool = False
+    error: str | None = None
+
+
+def run_profile_search(
+    session_state: MutableMapping[str, Any],
+    *,
+    profile_id: str,
+    search_service: Any,
+    dependent_cache_keys: Iterable[str] = (),
+    failure_cache_key: str | None = None,
+) -> CareerSearchResult:
+    """Exécute puis publie atomiquement une recherche pour un profil."""
+
+    normalized_profile_id = str(profile_id or "").strip()
+    if not normalized_profile_id:
+        raise ValueError("profile_id est obligatoire.")
+
+    result = search_service.search(normalized_profile_id)
+    WorkspaceSearchCache.set(
+        session_state,
+        normalized_profile_id,
+        result,
+    )
+    for key in dependent_cache_keys:
+        session_state.pop(str(key), None)
+    if failure_cache_key is not None:
+        session_state.pop(failure_cache_key, None)
+    return result
+
+
+def ensure_profile_search(
+    session_state: MutableMapping[str, Any],
+    *,
+    profile_id: str,
+    search_service: Any,
+    dependent_cache_keys: Iterable[str] = (),
+    failure_cache_key: str,
+) -> ProfileSearchAvailability:
+    """Réutilise le résultat du profil ou initialise sa recherche une fois."""
+
+    cached = WorkspaceSearchCache.get(session_state, profile_id)
+    if cached is not None:
+        return ProfileSearchAvailability(result=cached)
+
+    previous_error = session_state.get(failure_cache_key)
+    if previous_error is not None:
+        return ProfileSearchAvailability(
+            result=None,
+            error=str(previous_error),
+        )
+
+    try:
+        result = run_profile_search(
+            session_state,
+            profile_id=profile_id,
+            search_service=search_service,
+            dependent_cache_keys=dependent_cache_keys,
+            failure_cache_key=failure_cache_key,
+        )
+    except WorkspaceSearchError as error:
+        message = str(error)
+        session_state[failure_cache_key] = message
+        return ProfileSearchAvailability(result=None, error=message)
+
+    return ProfileSearchAvailability(result=result, searched=True)
 
 
 def finalize_onboarding_session(
@@ -31,18 +107,12 @@ def synchronize_profile_selection(
     profile_id: str | None,
     learning_result_key_prefix: str,
 ) -> str | None:
-    """Invalide les résultats transitoires appartenant à l'ancien profil."""
+    """Active un profil sans mélanger ni perdre ses résultats en cache."""
 
     previous = WorkspaceSearchCache.activate_profile(
         session_state,
         profile_id,
     )
-    normalized = str(profile_id or "").strip() or None
-    if previous is not None and previous != normalized:
-        session_state.pop(
-            f"{learning_result_key_prefix}_{previous}",
-            None,
-        )
     return previous
 
 

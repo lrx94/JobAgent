@@ -1,10 +1,13 @@
 from __future__ import annotations
-from src.ui.dashboard import (
-    display_dashboard,
-)
 from src.ui.job_card import (
     display_job,
 )
+from src.ui.layout import (
+    render_brand,
+    render_sidebar_navigation,
+    render_topbar,
+)
+from src.ui.theme import apply_jobagent_theme
 from src.workspace.search import (
     WorkspaceSearchCache,
     WorkspaceSearchError,
@@ -32,8 +35,10 @@ from src.workspace.ui import (
 )
 from src.workspace.ui.actions import (
     WorkspaceCVActions,
+    ensure_profile_search,
     finalize_onboarding_session,
     get_profile_learning_result,
+    run_profile_search,
     synchronize_profile_selection,
 )
 import hashlib
@@ -83,12 +88,16 @@ ONBOARDING_UPLOADER_GENERATION_KEY = (
 LEARNING_RESULT_KEY_PREFIX = (
     "workspace_learning_result"
 )
+MARKET_RESULT_KEY_PREFIX = "workspace_market_result"
+SEARCH_FAILURE_KEY_PREFIX = "workspace_search_failure"
 
 st.set_page_config(
-    page_title="Career Workspace",
-    page_icon="🧭",
+    page_title="JobAgent · Career Workspace",
+    page_icon=":material/work:",
     layout="wide",
 )
+
+apply_jobagent_theme()
 
 user_context = require_streamlit_user()
 
@@ -161,6 +170,18 @@ def clear_learning_result(
         learning_cache_key(profile_id),
         None,
     )
+
+
+def market_cache_key(profile_id: str) -> str:
+    return f"{MARKET_RESULT_KEY_PREFIX}_{profile_id}"
+
+
+def clear_market_result(profile_id: str) -> None:
+    st.session_state.pop(market_cache_key(profile_id), None)
+
+
+def search_failure_cache_key(profile_id: str) -> str:
+    return f"{SEARCH_FAILURE_KEY_PREFIX}_{profile_id}"
 
 
 def normalize_csv_values(
@@ -259,7 +280,7 @@ def render_quick_profile_creation() -> None:
             submitted = st.form_submit_button(
                 "Créer le profil",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
 
         if not submitted:
@@ -544,7 +565,7 @@ def render_profile_from_cv_creation() -> None:
             submitted = st.form_submit_button(
                 "Créer le profil depuis ce CV",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
 
         if not submitted:
@@ -697,7 +718,7 @@ def render_navigation(
                 f"{selected_profile.profile_id}"
             ),
             help="Supprimer ce profil",
-            use_container_width=True,
+            width="stretch",
         )
 
     if delete_profile:
@@ -728,7 +749,7 @@ def render_navigation(
                     "confirm_delete_profile_"
                     f"{selected_profile.profile_id}"
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
         with no_column:
@@ -738,7 +759,7 @@ def render_navigation(
                     "cancel_delete_profile_"
                     f"{selected_profile.profile_id}"
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
         if cancel_delete:
@@ -893,7 +914,7 @@ def render_cv_library(
         if st.button(
             "Associer au profil",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key=(
                 "workspace_attach_existing_"
                 f"{selected_profile.profile_id}"
@@ -997,7 +1018,7 @@ def render_cv_library(
                             "workspace_library_download_"
                             f"{document.cv_id}"
                         ),
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                 except Exception as error:
@@ -1044,7 +1065,7 @@ def render_cv_library(
                             "workspace_library_attach_"
                             f"{document.cv_id}"
                         ),
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         try:
                             cv_actions.attach_cv(
@@ -1146,7 +1167,7 @@ def render_cv_library(
                     rename_submitted = (
                         st.form_submit_button(
                             "Renommer",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     )
 
@@ -1197,7 +1218,7 @@ def render_cv_library(
                         "workspace_library_delete_"
                         f"{document.cv_id}"
                     ),
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     try:
                         cv_actions.delete_cv(
@@ -1266,7 +1287,6 @@ def render_profile_dashboard(
             "Compétences",
             "CV associés",
             "Bibliothèque",
-            "Offres",
         ]
     )
 
@@ -1302,45 +1322,51 @@ def render_profile_dashboard(
                 f"{format_file_size(primary_cv.size_bytes)}"
             )
 
-            try:
-                pdf_content = (
-                    workspace
-                    .cv_service
-                    .read_cv(
-                        primary_cv.cv_id
+            with st.expander(
+                "Voir le CV principal",
+                icon=":material/description:",
+                expanded=False,
+            ):
+                try:
+                    pdf_content = (
+                        workspace
+                        .cv_service
+                        .read_cv(
+                            primary_cv.cv_id
+                        )
                     )
-                )
 
-                st.pdf(
-                    pdf_content,
-                    height=760,
-                    key=(
-                        "workspace_overview_primary_pdf_"
-                        f"{profile.profile_id}_"
-                        f"{primary_cv.cv_id}"
-                    ),
-                )
+                    st.pdf(
+                        pdf_content,
+                        height=760,
+                        key=(
+                            "workspace_overview_primary_pdf_"
+                            f"{profile.profile_id}_"
+                            f"{primary_cv.cv_id}"
+                        ),
+                    )
 
-                st.download_button(
-                    "⬇️ Télécharger le CV principal",
-                    data=pdf_content,
-                    file_name=(
-                        primary_cv.original_filename
-                    ),
-                    mime="application/pdf",
-                    key=(
-                        "workspace_overview_download_"
-                        f"{profile.profile_id}_"
-                        f"{primary_cv.cv_id}"
-                    ),
-                    use_container_width=True,
-                )
+                    st.download_button(
+                        "Télécharger le CV principal",
+                        data=pdf_content,
+                        file_name=(
+                            primary_cv.original_filename
+                        ),
+                        mime="application/pdf",
+                        key=(
+                            "workspace_overview_download_"
+                            f"{profile.profile_id}_"
+                            f"{primary_cv.cv_id}"
+                        ),
+                        icon=":material/download:",
+                        width="stretch",
+                    )
 
-            except Exception as error:
-                st.error(
-                    "Impossible d’afficher le CV principal : "
-                    f"{error}"
-                )
+                except Exception as error:
+                    st.error(
+                        "Impossible d’afficher le CV principal : "
+                        f"{error}"
+                    )
 
         st.divider()
 
@@ -1505,7 +1531,7 @@ def render_profile_dashboard(
                                     f"{profile.profile_id}_"
                                     f"{cv.cv_id}"
                                 ),
-                                use_container_width=True,
+                                width="stretch",
                             )
                         except Exception as error:
                             st.error(
@@ -1569,12 +1595,6 @@ def render_profile_dashboard(
                 workspace
             ),
             selected_profile=profile,
-        )
-
-    with tabs[4]:
-        st.info(
-            "Les résultats de recherche sont affichés "
-            "dans la colonne « Recherche et offres »."
         )
 
 def render_provider_information(
@@ -1646,49 +1666,46 @@ def render_market_report(
 ) -> None:
     st.write("### 📊 Portrait du marché")
 
-    try:
-        context = (
-            search_service
-            .build_context(
+    cached_market = st.session_state.get(
+        market_cache_key(profile.profile_id)
+    )
+    if cached_market is None:
+        try:
+            context = search_service.build_context(
                 profile.profile_id
             )
-        )
 
-        primary_cv_id = (
-            profile.primary_cv.cv_id
-            if profile.primary_cv
-            else None
-        )
-
-        resolved_profile_skills = (
-            market_profile_skill_resolver
-            .resolve(
-                primary_cv_id=primary_cv_id,
-                fallback_keywords=(
-                    context.profile.keywords
-                ),
+            primary_cv_id = (
+                profile.primary_cv.cv_id
+                if profile.primary_cv
+                else None
             )
-        )
 
-        report = market_analyzer.analyze_career_result(
-            profile=context.profile,
-            search_result=search_result,
-            profile_skills=(
-                resolved_profile_skills
-                .skills
-            ),
-            profile_skill_source=(
-                resolved_profile_skills
-                .source
-            ),
-        )
+            resolved_profile_skills = market_profile_skill_resolver.resolve(
+                primary_cv_id=primary_cv_id,
+                fallback_keywords=context.profile.keywords,
+            )
 
-    except Exception as error:
-        st.warning(
-            "L'analyse du marché n'a pas pu "
-            f"être produite : {error}"
+            report = market_analyzer.analyze_career_result(
+                profile=context.profile,
+                search_result=search_result,
+                profile_skills=resolved_profile_skills.skills,
+                profile_skill_source=resolved_profile_skills.source,
+            )
+        except Exception as error:
+            st.warning(
+                "L'analyse du marché n'a pas pu "
+                f"être produite : {error}"
+            )
+            return
+
+        cached_market = (
+            report,
+            resolved_profile_skills,
         )
-        return
+        st.session_state[market_cache_key(profile.profile_id)] = cached_market
+
+    report, resolved_profile_skills = cached_market
 
     st.caption(
         "Analyse de l'échantillon actuellement "
@@ -1705,8 +1722,8 @@ def render_market_report(
     ):
         st.warning(warning)
 
-    metric_jobs, metric_coverage, metric_skills = (
-        st.columns(3)
+    metric_jobs, metric_coverage, metric_skills, metric_gaps = (
+        st.columns(4)
     )
 
     metric_jobs.metric(
@@ -1722,6 +1739,11 @@ def render_market_report(
     metric_skills.metric(
         "Compétences distinctes",
         report.detected_skill_count,
+    )
+
+    metric_gaps.metric(
+        "Gaps",
+        len(report.missing_skill_stats),
     )
 
     for warning in report.warnings:
@@ -1752,72 +1774,59 @@ def render_market_report(
 
             st.dataframe(
                 rows,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
     if report.skill_stats:
-        st.write(
-            "#### Compétences les plus demandées"
-        )
-
-        skill_rows = [
-            {
-                "Compétence": item.skill,
-                "Offres": item.job_count,
-                "Fréquence": (
-                    f"{item.percentage:.1f} %"
-                ),
-                "Dans le profil": (
-                    "✅"
-                    if item.present_in_profile
-                    else "—"
-                ),
-            }
-            for item
-            in report.skill_stats
-        ]
-
-        st.dataframe(
-            skill_rows,
-            use_container_width=True,
-            hide_index=True,
-        )
+        with st.expander(
+            "Compétences les plus demandées",
+            expanded=False,
+        ):
+            skill_rows = [
+                {
+                    "Compétence": item.skill,
+                    "Offres": item.job_count,
+                    "Fréquence": f"{item.percentage:.1f} %",
+                    "Dans le profil": (
+                        "Oui" if item.present_in_profile else "—"
+                    ),
+                }
+                for item in report.skill_stats
+            ]
+            st.dataframe(
+                skill_rows,
+                width="stretch",
+                hide_index=True,
+            )
 
     if report.missing_skill_stats:
-        st.write(
-            "#### Principaux écarts du profil"
-        )
-
-        missing_rows = [
-            {
-                "Compétence absente": (
-                    item.skill
-                ),
-                "Offres concernées": (
-                    item.job_count
-                ),
-                "Fréquence": (
-                    f"{item.percentage:.1f} %"
-                ),
-            }
-            for item
-            in report.missing_skill_stats[
-                :10
+        with st.expander(
+            "Principaux écarts",
+            expanded=False,
+        ):
+            missing_rows = [
+                {
+                    "Compétence absente": item.skill,
+                    "Offres concernées": item.job_count,
+                    "Fréquence": f"{item.percentage:.1f} %",
+                }
+                for item in report.missing_skill_stats[:10]
             ]
-        ]
+            st.dataframe(
+                missing_rows,
+                width="stretch",
+                hide_index=True,
+            )
 
-        st.dataframe(
-            missing_rows,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        for item in report.missing_skill_stats[:10]:
-            with st.expander(
-                f"Contexte — {item.skill} ({item.job_count} offre(s))",
-                expanded=False,
-            ):
+        with st.expander(
+            "Contextes des écarts",
+            expanded=False,
+        ):
+            for item in report.missing_skill_stats[:10]:
+                st.write(
+                    f"**{item.skill}** · {item.job_count} offre(s)"
+                )
                 if not item.evidence:
                     st.caption("Aucun contexte d'annonce disponible.")
                     continue
@@ -1857,9 +1866,147 @@ def render_market_report(
 
             st.dataframe(
                 pair_rows,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
+
+def render_learning_dashboard(
+    *,
+    profile: WorkspaceProfileItem,
+    search_result,
+) -> None:
+    profile_id = profile.profile_id
+    learning_result = get_learning_result(profile_id)
+
+    if learning_result is None:
+        try:
+            learning_result = (
+                workspace.learning_service
+                .analyze_search_result(
+                    search_result,
+                    profile_id=profile_id,
+                )
+            )
+        except Exception as error:
+            st.warning(
+                "Le Learning Engine n'a pas pu "
+                f"analyser cette recherche : {error}"
+            )
+            return
+        else:
+            set_learning_result(
+                profile_id,
+                learning_result,
+            )
+
+    learning_success = st.session_state.pop(
+        "learning_action_success",
+        None,
+    )
+    if learning_success:
+        st.success(learning_success)
+
+    try:
+        suggestions = (
+            workspace.learning_service
+            .list_suggestions(profile_id=profile_id)
+        )
+    except Exception as error:
+        st.warning(
+            "Impossible de rafraîchir les "
+            f"suggestions : {error}"
+        )
+        suggestions = learning_result.stored
+
+    def refresh_learning_after_action() -> None:
+        clear_learning_result(profile_id)
+
+    render_learning_panel(
+        learning_service=workspace.learning_service,
+        profile_id=profile_id,
+        suggestions=suggestions,
+        key_prefix=f"learning_{profile_id}",
+        on_action_success=refresh_learning_after_action,
+    )
+
+
+def render_workspace_dashboard(
+    *,
+    profile: WorkspaceProfileItem | None,
+    search_result,
+) -> None:
+    profile_tab, market_tab, learning_tab, search_tab = st.tabs(
+        ["Profil", "Market Insights", "Learning", "Recherche & Offres"]
+    )
+
+    with profile_tab:
+        render_profile_dashboard(profile)
+
+    with market_tab:
+        if profile is None or search_result is None:
+            st.info(
+                "Lancez une recherche pour afficher "
+                "les insights du marché."
+            )
+        else:
+            render_market_report(
+                profile=profile,
+                search_result=search_result,
+            )
+
+    with learning_tab:
+        if profile is None or search_result is None:
+            st.info(
+                "Lancez une recherche pour afficher "
+                "les suggestions Learning."
+            )
+        else:
+            render_learning_dashboard(
+                profile=profile,
+                search_result=search_result,
+            )
+
+    with search_tab:
+        render_search_panel(profile)
+
+
+def render_workspace_summary(
+    *,
+    profile: WorkspaceProfileItem | None,
+    search_result,
+) -> None:
+    locations = (
+        profile.config.get("locations", []) or []
+        if profile is not None
+        else []
+    )
+    with st.container(horizontal=True):
+        st.metric(
+            "Profil actif",
+            profile.display_name if profile is not None else "Non sélectionné",
+            border=True,
+        )
+        st.metric(
+            "Localisation principale",
+            str(locations[0]) if locations else "Non renseignée",
+            border=True,
+        )
+        st.metric(
+            "État de la recherche",
+            "Résultats en cache" if search_result is not None else "Aucune recherche",
+            border=True,
+        )
+        st.metric(
+            "Offres analysées",
+            search_result.total_collected if search_result is not None else "—",
+            border=True,
+        )
+        st.metric(
+            "Offres pertinentes",
+            search_result.total_relevant if search_result is not None else "—",
+            border=True,
+        )
+
 
 def render_search_panel(
     profile: WorkspaceProfileItem | None,
@@ -1904,81 +2051,33 @@ def render_search_panel(
         )
     )
 
-    if search_result is None:
-        try:
-            with st.spinner(
-                "Recherche des offres..."
-            ):
-                search_result = (
-                    search_service.search(
-                        profile_id
-                    )
-                )
-
-            WorkspaceSearchCache.set(
-                st.session_state,
-                profile_id,
-                search_result,
-            )
-
-            rerun()
-
-        except WorkspaceSearchError as error:
-            st.error(str(error))
-            return
-
-        except Exception as error:
-            st.error(
-                "La recherche a échoué : "
-                f"{error}"
-            )
-            return
-
     if st.button(
-        "🔄 Actualiser",
+        "Lancer la recherche",
+        icon=":material/refresh:",
         key=(
             "workspace_refresh_search_"
             f"{profile_id}"
         ),
-        use_container_width=True,
+        width="stretch",
     ):
-        WorkspaceSearchCache.clear(
-            st.session_state,
-            profile_id,
-        )
-
-        clear_learning_result(
-            profile_id
-        )
-
         try:
             with st.spinner(
-                "Actualisation des offres..."
+                "Recherche des offres..."
             ):
-                search_result = (
-                    search_service.search(
-                        profile_id
-                    )
+                run_profile_search(
+                    st.session_state,
+                    profile_id=profile_id,
+                    search_service=search_service,
+                    dependent_cache_keys=(
+                        learning_cache_key(profile_id),
+                        market_cache_key(profile_id),
+                    ),
+                    failure_cache_key=search_failure_cache_key(profile_id),
                 )
-
-            WorkspaceSearchCache.set(
-                st.session_state,
-                profile_id,
-                search_result,
-            )
-
-            rerun()
-
         except WorkspaceSearchError as error:
             st.error(str(error))
             return
-
-        except Exception as error:
-            st.error(
-                "La recherche a échoué : "
-                f"{error}"
-            )
-            return
+        rerun()
 
     search_result = (
         WorkspaceSearchCache.get(
@@ -2011,100 +2110,7 @@ def render_search_panel(
         search_result.total_relevant,
     )
 
-    
-    with st.expander(
-        "📊 Analyser le portrait du marché",
-        expanded=False,
-    ):
-        render_market_report(
-            profile=profile,
-            search_result=search_result,
-        )
-
-    learning_result = get_learning_result(
-        profile_id
-    )
-
-    if learning_result is None:
-        try:
-            learning_result = (
-                workspace.learning_service
-                .analyze_search_result(
-                    search_result,
-                    profile_id=profile_id,
-                )
-            )
-        except Exception as error:
-            st.warning(
-                "Le Learning Engine n'a pas pu "
-                f"analyser cette recherche : {error}"
-            )
-            learning_result = None
-        else:
-            set_learning_result(
-                profile_id,
-                learning_result,
-            )
-
-    
-    if learning_result is not None:
-        learning_success = (
-            st.session_state.pop(
-                "learning_action_success",
-                None,
-            )
-        )
-
-        if learning_success:
-            st.success(
-                learning_success
-            )
-
-        try:
-            current_learning_suggestions = (
-                workspace.learning_service
-                .list_suggestions(profile_id=profile_id)
-            )
-        except Exception as error:
-            st.warning(
-                "Impossible de rafraîchir les "
-                f"suggestions : {error}"
-            )
-
-            current_learning_suggestions = (
-                learning_result.stored
-            )
-
-        def refresh_learning_after_action() -> None:
-            clear_learning_result(
-                profile_id
-            )
-
-        with st.expander(
-            "🧠 Learning Engine",
-            expanded=False,
-        ):
-            render_learning_panel(
-                learning_service=(
-                    workspace.learning_service
-                ),
-                profile_id=profile_id,
-                suggestions=(
-                    current_learning_suggestions
-                ),
-                key_prefix=(
-                    f"learning_{profile_id}"
-                ),
-                on_action_success=(
-                    refresh_learning_after_action
-                ),
-            )
-
- 
-    jobs = list(
-        search_result.jobs
-    )
-
+    jobs = tuple(search_result.jobs)
     if not jobs:
         st.info(
             "Aucune offre suffisamment pertinente "
@@ -2112,16 +2118,9 @@ def render_search_panel(
         )
         return
 
-    display_dashboard(
-        jobs
-    )
-
-    st.write("### Résultats")
-
+    st.write("### Offres pertinentes")
     for job in jobs:
-        display_job(
-            job
-        )
+        display_job(job)
 
 snapshot = build_workspace_snapshot(
     workspace
@@ -2138,8 +2137,6 @@ selected_profile_id = (
     )
 )
 
-st.title("🧭 Career Workspace")
-
 display_name = str(
     getattr(
         user_context,
@@ -2149,23 +2146,9 @@ display_name = str(
     or ""
 ).strip()
 
-st.caption(
-    "Espace carrière privé"
-    + (
-        f" de {display_name}"
-        if display_name
-        else ""
-    )
-)
-
-navigation_column, dashboard_column, cv_column = (
-    st.columns(
-        [1.15, 2.2, 1.55],
-        gap="large",
-    )
-)
-
-with navigation_column:
+with st.sidebar:
+    render_brand()
+    render_sidebar_navigation()
     render_navigation(
         snapshot=snapshot,
         selected_profile_id=(
@@ -2187,12 +2170,60 @@ selected_profile = (
     else None
 )
 
-with dashboard_column:
-    render_profile_dashboard(
-        selected_profile
-    )
+automatic_search_error = None
+if selected_profile is not None:
+    with st.spinner("Recherche des offres..."):
+        search_availability = ensure_profile_search(
+            st.session_state,
+            profile_id=selected_profile.profile_id,
+            search_service=search_service,
+            dependent_cache_keys=(
+                learning_cache_key(selected_profile.profile_id),
+                market_cache_key(selected_profile.profile_id),
+            ),
+            failure_cache_key=search_failure_cache_key(
+                selected_profile.profile_id
+            ),
+        )
+    automatic_search_error = search_availability.error
 
-with cv_column:
-    render_search_panel(
-        selected_profile
+render_topbar(
+    profile_name=(
+        selected_profile.display_name
+        if selected_profile
+        else None
+    ),
+    locations=(
+        selected_profile.config.get("locations", [])
+        if selected_profile
+        else ()
+    ),
+)
+
+st.html('<div class="ja-eyebrow">Espace carrière privé</div>')
+st.title("Career Workspace")
+st.caption(
+    f"Bienvenue, {display_name}." if display_name else "Votre espace de recherche d’emploi intelligent."
+)
+
+dashboard_search_result = (
+    WorkspaceSearchCache.get(
+        st.session_state,
+        selected_profile.profile_id,
     )
+    if selected_profile is not None
+    else None
+)
+
+if automatic_search_error:
+    st.warning(automatic_search_error)
+
+render_workspace_summary(
+    profile=selected_profile,
+    search_result=dashboard_search_result,
+)
+
+render_workspace_dashboard(
+    profile=selected_profile,
+    search_result=dashboard_search_result,
+)

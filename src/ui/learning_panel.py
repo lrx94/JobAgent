@@ -16,22 +16,22 @@ from src.workspace.learning_service import (
 
 STATUS_DISPLAY = {
     SuggestionStatus.CANDIDATE: {
-        "icon": "🟡",
+        "icon": ":material/pending:",
         "label": "À examiner",
         "section": "À examiner",
     },
     SuggestionStatus.ACCEPTED: {
-        "icon": "✅",
+        "icon": ":material/check_circle:",
         "label": "Acceptée",
         "section": "Acceptées",
     },
     SuggestionStatus.REJECTED: {
-        "icon": "❌",
+        "icon": ":material/cancel:",
         "label": "Rejetée",
         "section": "Rejetées",
     },
     SuggestionStatus.IGNORED: {
-        "icon": "⏸️",
+        "icon": ":material/pause_circle:",
         "label": "Ignorée",
         "section": "Ignorées",
     },
@@ -108,7 +108,7 @@ def render_learning_panel(
         ]
     )
 
-    metric_columns = st.columns(4)
+    metric_columns = st.columns(4, border=True)
 
     metric_columns[0].metric(
         "À examiner",
@@ -140,53 +140,37 @@ def render_learning_panel(
             "restent à examiner."
         )
 
-    _render_status_section(
-        status=SuggestionStatus.CANDIDATE,
-        suggestions=grouped[
-            SuggestionStatus.CANDIDATE
-        ],
-        learning_service=learning_service,
-        profile_id=profile_id,
-        key_prefix=key_prefix,
-        on_action_success=on_action_success,
-        expanded=True,
+    status_labels = {
+        "Tous": None,
+        "À examiner": SuggestionStatus.CANDIDATE,
+        "Acceptées": SuggestionStatus.ACCEPTED,
+        "Rejetées": SuggestionStatus.REJECTED,
+        "Ignorées": SuggestionStatus.IGNORED,
+    }
+    selected_label = st.selectbox(
+        "Filtrer par statut",
+        options=tuple(status_labels),
+        key=f"{key_prefix}_status_filter",
     )
+    selected_status = status_labels[selected_label]
 
-    _render_status_section(
-        status=SuggestionStatus.ACCEPTED,
-        suggestions=grouped[
-            SuggestionStatus.ACCEPTED
-        ],
-        learning_service=learning_service,
-        profile_id=profile_id,
-        key_prefix=key_prefix,
-        on_action_success=on_action_success,
-        expanded=False,
-    )
-
-    _render_status_section(
-        status=SuggestionStatus.REJECTED,
-        suggestions=grouped[
-            SuggestionStatus.REJECTED
-        ],
-        learning_service=learning_service,
-        profile_id=profile_id,
-        key_prefix=key_prefix,
-        on_action_success=on_action_success,
-        expanded=False,
-    )
-
-    _render_status_section(
-        status=SuggestionStatus.IGNORED,
-        suggestions=grouped[
-            SuggestionStatus.IGNORED
-        ],
-        learning_service=learning_service,
-        profile_id=profile_id,
-        key_prefix=key_prefix,
-        on_action_success=on_action_success,
-        expanded=False,
-    )
+    for status in (
+        SuggestionStatus.CANDIDATE,
+        SuggestionStatus.ACCEPTED,
+        SuggestionStatus.REJECTED,
+        SuggestionStatus.IGNORED,
+    ):
+        if selected_status is not None and status != selected_status:
+            continue
+        _render_status_section(
+            status=status,
+            suggestions=grouped[status],
+            learning_service=learning_service,
+            profile_id=profile_id,
+            key_prefix=key_prefix,
+            on_action_success=on_action_success,
+            expanded=False,
+        )
 
 
 def _sort_suggestions(
@@ -348,7 +332,8 @@ def _render_actions(
         columns = st.columns(3)
 
         if columns[0].button(
-            "✅ Accepter",
+            "Accepter",
+            icon=":material/check:",
             key=(
                 f"{key_prefix}_accept_"
                 f"{suggestion.suggestion_id}"
@@ -361,7 +346,7 @@ def _render_actions(
                 ),
                 suggestion=suggestion,
                 success_message=(
-                    f"✅ Suggestion « {label} » "
+                    f"Suggestion « {label} » "
                     "acceptée."
                 ),
                 on_action_success=(
@@ -370,7 +355,8 @@ def _render_actions(
             )
 
         if columns[1].button(
-            "⏸️ Ignorer",
+            "Ignorer",
+            icon=":material/pause:",
             key=(
                 f"{key_prefix}_ignore_"
                 f"{suggestion.suggestion_id}"
@@ -383,7 +369,7 @@ def _render_actions(
                 ),
                 suggestion=suggestion,
                 success_message=(
-                    f"⏸️ Suggestion « {label} » "
+                    f"Suggestion « {label} » "
                     "ignorée."
                 ),
                 on_action_success=(
@@ -392,7 +378,8 @@ def _render_actions(
             )
 
         if columns[2].button(
-            "❌ Rejeter",
+            "Rejeter",
+            icon=":material/close:",
             key=(
                 f"{key_prefix}_reject_"
                 f"{suggestion.suggestion_id}"
@@ -405,7 +392,7 @@ def _render_actions(
                 ),
                 suggestion=suggestion,
                 success_message=(
-                    f"❌ Suggestion « {label} » "
+                    f"Suggestion « {label} » "
                     "rejetée."
                 ),
                 on_action_success=(

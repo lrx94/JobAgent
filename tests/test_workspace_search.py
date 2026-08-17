@@ -493,7 +493,7 @@ class TestWorkspaceSearchService(
             second,
         )
 
-    def test_activating_new_profile_invalidates_only_previous(self):
+    def test_activating_new_profile_preserves_profile_scoped_results(self):
         session_state: dict = {}
         daf = CareerSearchResult()
         dsi = CareerSearchResult()
@@ -509,7 +509,7 @@ class TestWorkspaceSearchService(
         )
 
         self.assertEqual(previous, "daf")
-        self.assertIsNone(WorkspaceSearchCache.get(session_state, "daf"))
+        self.assertIs(WorkspaceSearchCache.get(session_state, "daf"), daf)
         self.assertIs(WorkspaceSearchCache.get(session_state, "dsi"), dsi)
         self.assertIs(WorkspaceSearchCache.get(session_state, "other"), other)
 
